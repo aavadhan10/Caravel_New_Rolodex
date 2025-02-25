@@ -870,6 +870,13 @@ if st.session_state['search_pressed'] and st.session_state['query']:
                 matched_skills = match['matched_skills']
                 
                 with st.container():
+                    # Determine availability class based on status
+                    availability_class = "availability-tag"
+                    if "Limited" in lawyer['availability'] or "Vacation" in lawyer['availability']:
+                        availability_class = "availability-tag-limited"
+                    elif "Available" in lawyer['availability']:
+                        availability_class = "availability-tag-available"
+                        
                     # Use raw HTML string concatenation to avoid Streamlit escaping issues
                     html_output = f"""
                     <div class="lawyer-card">
