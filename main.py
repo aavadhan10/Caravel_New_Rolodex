@@ -44,9 +44,17 @@ st.markdown("""
 .reasoning-box {
     background-color: #f1f8e9;
     border-radius: 5px;
-    padding: 15px;
-    margin-top: 10px;
-    border-left: 3px solid #7cb342;
+    padding: 20px;
+    margin-top: 15px;
+    border-left: 5px solid #7cb342;
+    font-size: 15px;
+    line-height: 1.5;
+}
+.match-rationale-title {
+    font-weight: bold;
+    font-size: 16px;
+    color: #2e7d32;
+    margin-bottom: 8px;
 }
 .recent-query-button {
     margin-bottom: 8px !important;
@@ -119,6 +127,28 @@ h1 {
     margin-top: 5px;
     font-weight: 500;
 }
+.bio-section {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border-radius: 5px;
+}
+.bio-level {
+    font-weight: bold;
+    color: #1e4b79;
+    font-size: 15px;
+    margin-bottom: 4px;
+}
+.bio-details {
+    color: #555;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+.bio-experience, .bio-education, .industry-experience {
+    font-size: 14px;
+    margin-top: 5px;
+    color: #333;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -154,11 +184,104 @@ st.sidebar.info(
 @lru_cache(maxsize=1)  # Cache the result to avoid reloading
 def load_lawyer_data():
     try:
-        df = pd.read_csv('combined_unique.csv')
-        return process_lawyer_data(df)
+        # Load the skills data
+        skills_df = pd.read_csv('combined_unique.csv')
+        skills_data = process_lawyer_data(skills_df)
+        
+        # Load the biographical data
+        bio_df = pd.read_csv('BD_Caravel.csv')
+        bio_data = process_bio_data(bio_df)
+        
+        # Combine the data
+        combined_data = combine_lawyer_data(skills_data, bio_data)
+        
+        return combined_data
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return None
+
+# Function to process the biographical data
+def process_bio_data(df):
+    lawyers_bio = {}
+    
+    for _, row in df.iterrows():
+        full_name = f"{row['First Name'].strip()} {row['Last Name'].strip()}"
+        
+        bio = {
+            'level': row['Level/Title'],
+            'call': row['Call'],
+            'jurisdiction': row['Jurisdiction'],
+            'location': row['Location'],
+            'practice_areas': row['Area of Practise + Add Info'],
+            'industry_experience': row['Industry Experience'],
+            'languages': row['Languages'],
+            'previous_in_house': row['Previous In-House Companies'],
+            'previous_firms': row['Previous Companies/Firms'],
+            'education': row['Education'],
+            'awards': row['Awards/Recognition'],
+            'notable_items': row['Notable Items/Personal Details '],
+            'expert': row['Expert']
+        }
+        
+        lawyers_bio[full_name] = bio
+    
+    return {
+        'lawyers_bio': lawyers_bio
+    }
+
+# Function to combine skills and biographical data
+def combine_lawyer_data(skills_data, bio_data):
+    if not skills_data or not bio_data:
+        return skills_data
+    
+    combined_lawyers = []
+    
+    for lawyer in skills_data['lawyers']:
+        # Try to find matching biographical data
+        name = lawyer['name']
+        bio = None
+        
+        # Try exact match
+        if name in bio_data['lawyers_bio']:
+            bio = bio_data['lawyers_bio'][name]
+        else:
+            # Try partial match
+            for bio_name, bio_info in bio_data['lawyers_bio'].items():
+                # Check if first and last name parts match
+                name_parts = name.lower().split()
+                bio_name_parts = bio_name.lower().split()
+                
+                if any(part in bio_name.lower() for part in name_parts) and any(part in name.lower() for part in bio_name_parts):
+                    bio = bio_info
+                    break
+        
+        # Add biographical data if found
+        if bio:
+            lawyer['bio'] = bio
+        else:
+            lawyer['bio'] = {
+                'level': '',
+                'call': '',
+                'jurisdiction': '',
+                'location': '',
+                'practice_areas': '',
+                'industry_experience': '',
+                'languages': '',
+                'previous_in_house': '',
+                'previous_firms': '',
+                'education': '',
+                'awards': '',
+                'notable_items': '',
+                'expert': ''
+            }
+        
+        combined_lawyers.append(lawyer)
+    
+    return {
+        'lawyers': combined_lawyers,
+        'skill_map': skills_data['skill_map'],
+        'unique_skills': skills_data['unique_skills']
+    }
 
 def process_lawyer_data(df):
     # Get all skill columns
@@ -667,34 +790,82 @@ def match_lawyers(data, query, top_n=5):
 # Function to format Claude's analysis prompt
 def format_claude_prompt(query, matches):
     prompt = f"""
-I need to analyze and provide reasoning for lawyer matches based on a specific legal query from a client. 
-Here's the client query: "{query}"
+I need to analyze and provide detailed reasoning for why specific lawyers match a client's legal needs based on their expertise, skills, and background.
 
-Here are the matched lawyers with their relevant skills:
+Client's Legal Need: "{query}"
+
+Here are the matching lawyers with their skills and biographical information:
 
 """
     
     for i, match in enumerate(matches, 1):
         lawyer = match['lawyer']
         skills = match['matched_skills']
-        prompt += f"Lawyer {i}: {lawyer['name']}\n"
-        prompt += f"Practice Area: {lawyer['practice_area']}\n"
-        prompt += "Relevant skills:\n"
+        bio = lawyer['bio']
+        
+        prompt += f"LAWYER {i}: {lawyer['name']}\n"
+        prompt += "---------------------------------------------\n"
+        
+        # Add skills information
+        prompt += "RELEVANT SKILLS:\n"
         for skill in skills:
             prompt += f"- {skill['skill']}: {skill['value']} points\n"
-        prompt += "\n"
+        
+        # Add biographical information
+        prompt += "\nBIOGRAPHICAL INFORMATION:\n"
+        if bio['level']:
+            prompt += f"- Level/Title: {bio['level']}\n"
+        if bio['call']:
+            prompt += f"- Called to Bar: {bio['call']}\n"
+        if bio['jurisdiction']:
+            prompt += f"- Jurisdiction: {bio['jurisdiction']}\n"
+        if bio['location']:
+            prompt += f"- Location: {bio['location']}\n"
+        if bio['practice_areas']:
+            prompt += f"- Practice Areas: {bio['practice_areas']}\n"
+        if bio['industry_experience']:
+            prompt += f"- Industry Experience: {bio['industry_experience']}\n"
+        if bio['previous_in_house']:
+            prompt += f"- Previous In-House Experience: {bio['previous_in_house']}\n"
+        if bio['previous_firms']:
+            prompt += f"- Previous Law Firms: {bio['previous_firms']}\n"
+        if bio['education']:
+            prompt += f"- Education: {bio['education']}\n"
+        if bio['awards']:
+            prompt += f"- Awards/Recognition: {bio['awards']}\n"
+        if bio['expert']:
+            prompt += f"- Areas of Expertise: {bio['expert']}\n"
+        if bio['notable_items']:
+            prompt += f"- Notable Experience: {bio['notable_items']}\n"
+            
+        # Add availability information
+        prompt += f"\nAVAILABILITY: {lawyer['availability']}\n"
+        if lawyer['days_available'] is not None:
+            prompt += f"Days available: {lawyer['days_available']}\n"
+        if lawyer['hours_available'] is not None:
+            prompt += f"Hours available: {lawyer['hours_available']}\n"
+        if lawyer['engagement_note']:
+            prompt += f"Current engagement: {lawyer['engagement_note']}\n"
+            
+        prompt += "\n\n"
     
     prompt += """
-For each lawyer, provide a brief (3-4 sentences) explanation of why they would be a good match for the client query.
-Focus on their specific expertise and how it relates to the legal needs described in the query.
-Include any relevant information about their practice area if applicable.
-Don't rank the lawyers - just explain each one's relevant strengths for this client matter.
+For each lawyer, provide a DETAILED explanation (at least 4-5 sentences) of why they would be an excellent match for this client need. Include specific aspects of their:
+
+1. Skills relevance - How their specific skills directly relate to the client's needs
+2. Industry background - How their industry experience aligns with the client's requirements
+3. Prior experience - Highlight relevant previous work or clients that demonstrate fit
+4. Education or certifications that may be valuable for this matter
+5. Geographic or jurisdictional advantages if relevant
+6. Current availability to take on this work
+
+Your analysis should be thorough and specific, referencing their unique qualifications rather than generic statements. Format your response as a detailed paragraph for each lawyer that explains exactly why they're well-positioned to address this specific client need.
 
 Format your response in JSON like this:
 {
-    "lawyer1": "reasoning for why lawyer 1 is a good match...",
-    "lawyer2": "reasoning for why lawyer 2 is a good match...",
-    "lawyer3": "reasoning for why lawyer 3 is a good match..."
+    "lawyer1_name": "Detailed explanation of why lawyer 1 is an excellent match...",
+    "lawyer2_name": "Detailed explanation of why lawyer 2 is an excellent match...",
+    "lawyer3_name": "Detailed explanation of why lawyer 3 is an excellent match..."
 }
 """
     return prompt
@@ -888,6 +1059,39 @@ if st.session_state['search_pressed'] and st.session_state['query']:
                         <div class="practice-area">Practice Area: {lawyer['practice_area']}</div>
                     """
                     
+                    # Get bio data
+                    bio = lawyer['bio'] if 'bio' in lawyer else {}
+                    
+                    # Create biographical info section
+                    bio_html = ""
+                    if bio:
+                        bio_html += '<div class="bio-section">'
+                        if bio.get('level'):
+                            bio_html += f'<div class="bio-level">{bio["level"]}</div>'
+                        
+                        bio_details = []
+                        if bio.get('call'):
+                            bio_details.append(f'Called to Bar: {bio["call"]}')
+                        if bio.get('jurisdiction'):
+                            bio_details.append(f'Jurisdiction: {bio["jurisdiction"]}')
+                        if bio.get('location'):
+                            bio_details.append(f'Location: {bio["location"]}')
+                        
+                        if bio_details:
+                            bio_html += f'<div class="bio-details">{" | ".join(bio_details)}</div>'
+                            
+                        if bio.get('previous_in_house'):
+                            bio_html += f'<div class="bio-experience"><strong>In-House Experience:</strong> {bio["previous_in_house"]}</div>'
+                        if bio.get('previous_firms'):
+                            bio_html += f'<div class="bio-experience"><strong>Previous Firms:</strong> {bio["previous_firms"]}</div>'
+                        if bio.get('education'):
+                            bio_html += f'<div class="bio-education"><strong>Education:</strong> {bio["education"]}</div>'
+                            
+                        bio_html += '</div>'
+                    
+                    # Add the bio section to the HTML output
+                    html_output += bio_html
+                    
                     # Add availability details
                     html_output += '<div class="availability-details">'
                     if lawyer['days_available'] is not None:
@@ -905,6 +1109,10 @@ if st.session_state['search_pressed'] and st.session_state['query']:
                     if lawyer['engagement_note']:
                         html_output += f'<div class="engagement-note">{lawyer["engagement_note"]}</div>'
                     
+                    # Add industry experience if available
+                    if bio and bio.get('industry_experience'):
+                        html_output += f'<div class="industry-experience"><strong>Industry Experience:</strong> {bio["industry_experience"]}</div>'
+                    
                     # Add the rest of the card
                     html_output += f"""
                         <div class="billable-rate">Rate: {lawyer['billable_rate']} | Recent Client: {lawyer['last_client']}</div>
@@ -913,7 +1121,7 @@ if st.session_state['search_pressed'] and st.session_state['query']:
                             {"".join([f'<span class="skill-tag">{skill["skill"]}: {skill["value"]}</span>' for skill in matched_skills])}
                         </div>
                         <div class="reasoning-box">
-                            <strong>Match Rationale:</strong><br/>
+                            <div class="match-rationale-title">WHY THIS LAWYER IS AN EXCELLENT MATCH:</div>
                             {reasoning.get(lawyer['name'], 'This lawyer has relevant expertise in the areas described in the client query.')}
                         </div>
                     </div>
