@@ -146,20 +146,30 @@ def process_lawyer_data(df):
         values = [lawyer_row[col] for col in columns if pd.notna(lawyer_row[col])]
         return max(values) if values else 0
     
-    # Create lawyer profiles with additional mock data for demo purposes
+    # Create lawyer profiles with real availability data and some demo data
     lawyers = []
     practice_areas = ["Corporate", "Litigation", "IP", "Employment", "Privacy", "Finance", "Real Estate", "Tax"]
-    availability_statuses = ["Available Now", "Available Next Week", "Limited Availability", "On Leave"]
     rate_ranges = ["$400-500/hr", "$500-600/hr", "$600-700/hr", "$700-800/hr", "$800-900/hr"]
     
+    # Real availability data from the provided information
+    availability_data = get_lawyer_availability()
+    
     for _, row in df.iterrows():
+        lawyer_name = row['Submitter Name']
+        availability_info = get_availability_for_lawyer(lawyer_name)
+        
         profile = {
-            'name': row['Submitter Name'],
+            'name': lawyer_name,
             'email': row['Submitter Email'],
             'skills': {},
-            # Add mock data for demo 
+            # Use real availability data when available
+            'availability': availability_info.get('status', 'Status Unknown'),
+            'days_available': availability_info.get('days', None),
+            'hours_available': availability_info.get('hours', None),
+            'vacation': availability_info.get('vacations', []),
+            'engagement_note': availability_info.get('engagementNote', ''),
+            # Add some demo data for other fields
             'practice_area': np.random.choice(practice_areas),
-            'availability': np.random.choice(availability_statuses, p=[0.4, 0.3, 0.2, 0.1]),
             'billable_rate': np.random.choice(rate_ranges),
             'last_client': f"Client {np.random.randint(100, 999)}"
         }
@@ -178,13 +188,367 @@ def process_lawyer_data(df):
         'unique_skills': list(skill_map.keys())
     }
 
-# Function to get top skills for a lawyer
-def get_top_skills(lawyer, limit=5):
-    return sorted(
-        [{'skill': skill, 'value': value} for skill, value in lawyer['skills'].items()],
-        key=lambda x: x['value'],
-        reverse=True
-    )[:limit]
+# Function to load and process availability data
+def get_lawyer_availability():
+    # Real availability data parsed from the provided information
+    days_available = parse_days_availability()
+    hours_available = parse_hours_availability()
+    vacations = parse_vacations()
+    engagement_notes = parse_engagement_notes()
+    
+    # Combine all data into a single structure
+    lawyer_availability = {}
+    
+    # First handle days available
+    for name, days in days_available.items():
+        if name not in lawyer_availability:
+            lawyer_availability[name] = {}
+        lawyer_availability[name]['days'] = days
+    
+    # Add hours available
+    for name, hours in hours_available.items():
+        if name not in lawyer_availability:
+            lawyer_availability[name] = {}
+        lawyer_availability[name]['hours'] = hours
+    
+    # Add vacation data
+    for name, vacation_dates in vacations.items():
+        matching_names = [full_name for full_name in lawyer_availability 
+                          if full_name.split()[0] == name.split()[0] or full_name.split()[-1] == name.split()[-1]]
+        
+        if matching_names:
+            target_name = matching_names[0]
+            if 'vacations' not in lawyer_availability[target_name]:
+                lawyer_availability[target_name]['vacations'] = []
+            lawyer_availability[target_name]['vacations'].append(vacation_dates)
+        else:
+            if name not in lawyer_availability:
+                lawyer_availability[name] = {}
+            if 'vacations' not in lawyer_availability[name]:
+                lawyer_availability[name]['vacations'] = []
+            lawyer_availability[name]['vacations'].append(vacation_dates)
+    
+    # Add engagement notes
+    for name, note in engagement_notes.items():
+        matching_names = [full_name for full_name in lawyer_availability 
+                          if full_name.split()[0] == name.split()[0] or full_name.split()[-1] == name.split()[-1]]
+        
+        if matching_names:
+            lawyer_availability[matching_names[0]]['engagementNote'] = note
+        else:
+            if name not in lawyer_availability:
+                lawyer_availability[name] = {}
+            lawyer_availability[name]['engagementNote'] = note
+    
+    # Generate availability status for each lawyer
+    for name, data in lawyer_availability.items():
+        lawyer_availability[name]['status'] = generate_availability_status(data)
+    
+    return lawyer_availability
+
+# Function to get availability for a specific lawyer
+def get_availability_for_lawyer(name):
+    availability_data = get_lawyer_availability()
+    
+    # Check for exact match
+    if name in availability_data:
+        return availability_data[name]
+    
+    # Check for partial match (first name or last name)
+    for avail_name, data in availability_data.items():
+        if (name.split()[0] in avail_name) or (name.split()[-1] in avail_name):
+            return data
+    
+    # Default status if no match found
+    return {
+        'status': 'Status Unknown',
+        'days': None,
+        'hours': None
+    }
+
+# Function to generate availability status based on data
+def generate_availability_status(lawyer_data):
+    # The current date is February 25, 2025
+    current_date = '2025-02-25'
+    
+    # Check if on vacation today
+    if 'vacations' in lawyer_data:
+        for vacation in lawyer_data['vacations']:
+            if "Feb 25" in vacation or (
+                "Feb" in vacation and "-" in vacation and 
+                not any(month in vacation for month in ["Mar", "April", "May"])):
+                return "On Vacation"
+    
+    # Check engagement notes for current status
+    if 'engagementNote' in lawyer_data:
+        note = lawyer_data['engagementNote']
+        if "not currently in an engagement" in note:
+            return "Available Now"
+        if "will conclude at the end of February" in note:
+            return "Available Soon (March)"
+    
+    # Use days availability to determine status
+    if 'days' in lawyer_data:
+        days = lawyer_data['days']
+        if days in [5, 4]:
+            return "Very Limited Availability"
+        elif days == 3:
+            return "Limited Availability"
+        elif days in [2, 1]:
+            return "Partially Available"
+        elif days == 0:
+            return "Available Now"
+    
+    # If no days data, use hours
+    if 'hours' in lawyer_data:
+        hours = lawyer_data['hours']
+        if hours in ["80+", "80"]:
+            return "Very Limited Availability"
+        elif hours in ["60", "40"]:
+            return "Limited Availability"
+        elif hours in ["30", "20"]:
+            return "Partially Available"
+        elif hours == "0":
+            return "Available Now"
+    
+    return "Status Unknown"
+
+# Parse days availability data
+def parse_days_availability():
+    days_available_text = """
+    **5 days**
+    **4 days**
+    **3 days**
+    **2 days**
+    **1 day**
+    **0 days**
+    Ashleigh Frankel
+    Spencer Shepherd
+    Evelyn Ackah
+    Dave McIntyre
+    Sean Holler
+    Bernadette Saumur
+    John Burns
+    Adrian Dirassar
+    Wendy Bach
+    Meenal Gole
+     
+     
+    Kristen Pizzolo
+    James Oborne
+     
+    Leslie Allan
+    Bill Stanger
+    Peter Dale
+    Lisa McDowell
+    Bill Herman
+    Frank Giblon
+     
+    Mitch Mostyn
+    Randy Witten
+    Rose Oushalkas
+    Alan Sless
+    Nikki Stewart-St. Arnault
+    Connie Chan
+    Jeff Bright
+    David Masse
+    Zubdah Ahmad
+    Greg Porter
+    Hugh Kerr
+    Olivia Dutka
+    Jason Lakhan
+     
+    Melissa Babel
+    David Dunbar
+    Josee Cameron-Virgo
+    Sean Mitra
+    Michelle Grant-Asselin
+    Morli Shemesh
+    Sarah Sidhu
+     
+    Ellen Swan
+    Sarah Blackburn
+    John Whyte
+    Rory Dyck
+    Sherry Hanlon
+    Corrie Stepan
+    Peter Kalins
+    Wanda Shreve
+    Greg Ramsay
+    Jim Papamanolis
+    Mark Wainman
+    Brenda Chandler
+    Michele Koyle
+    Annie Belecki
+    Christa Wessel
+    Chelsea Bianchin
+    Binita Jacob
+    Ernie Belyea
+    Aliza Dason
+    """
+    
+    lines = days_available_text.split('\n')
+    current_days = None
+    result = {}
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        days_match = re.match(r'\*\*(\d+) days?\*\*', line)
+        if days_match:
+            current_days = int(days_match.group(1))
+        elif current_days is not None and not line.startswith('**'):
+            result[line] = current_days
+    
+    return result
+
+# Parse hours availability data
+def parse_hours_availability():
+    hours_available_text = """
+    **80+ hours**
+    **80 hours**
+    **60 hours**
+    **40 hours**
+    **30 hours**
+    **20 hours**
+    **0 hours**
+    Spencer Shepherd
+    Sean Holler
+    Dave McIntyre
+    Bernadette Saumur
+    Adrian Dirassar
+    Bill Herman
+    Wendy Bach
+    Ashleigh Frankel
+    James Oborne
+     
+    Leslie Allan
+    Evelyn Ackah
+    John Burns
+    Kristen Pizzolo
+    Frank Giblon
+    Zubdah Ahmad
+    Meenal Gole
+    Alan Sless
+    Bill Stanger
+    Peter Dale
+    Lisa McDowell
+    Sarah Sidhu
+     
+    Jeff Bright
+    Michelle Grant-Asselin
+    Len Gaik
+    Nikki Stewart-St. Arnault
+    Olivia Dutka
+    Jason Lakhan
+     
+    Rose Oushalkas
+    Greg Porter
+    Mark Wainman
+    Sean Mitra
+    Morli Shemesh
+     
+    Randy Witten
+    Melissa Babel
+    Mitch Mostyn
+    Connie Chan
+    David Masse
+    Hugh Kerr
+    David Dunbar
+    Josee Cameron-Virgo
+    Rory Dyck
+    Wanda Shreve
+    Greg Ramsay
+    Chelsea Bianchin
+     
+    Ellen Swan
+    Sarah Blackburn
+    John Whyte
+    Sherry Hanlon
+    Corrie Stepan
+    Peter Kalins
+    Jim Papamanolis
+    Brenda Chandler
+    Michele Koyle
+    Annie Belecki
+    Christa Wessel
+    Binita Jacob
+    Ernie Belyea
+    Aliza Dason
+    """
+    
+    lines = hours_available_text.split('\n')
+    current_hours = None
+    result = {}
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        hours_match = re.match(r'\*\*(\d+\+?)( hours)\*\*', line)
+        if hours_match:
+            current_hours = hours_match.group(1)
+        elif current_hours is not None and not line.startswith('**'):
+            result[line] = current_hours
+    
+    return result
+
+# Parse vacation data
+def parse_vacations():
+    vacation_text = """
+    **Contractor Vacations:**
+    David Zender- Feb 2- Mar 7
+    Chelsea Bianchin- Feb 12-19; Mar 10-23
+    John Burns- Feb 14
+    Mark Wainman- Feb 21
+    Lisa McDowell- Feb 24-28
+    John Whyte- Feb 25-Mar 25
+    Sue Gaudi- Feb 26- Mar 1; March 7-17; May 15-30
+    Sarah Blackburn- Feb 27-Mar 3; Mar 8-15
+    Sara Kunto- Feb 28-March 9
+    Kristen Pizzolo- Mar 3-7
+    Josee Cameron-Virgo- March 4-17
+    Michelle Grant Asselin- March 10-16
+    Ellen Swan- March 8-16
+    Jim Papamanolis- March 9-15
+    Leslie Allan- March 9-15
+    Melissa Babel- March 10-18
+    Lori Lyn Adams- March 15-30
+    David Dunbar- April 17- May 6
+    David Masse- May 10-30
+    """
+    
+    lines = vacation_text.split('\n')
+    result = {}
+    collecting_vacations = False
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        if "**Contractor Vacations:**" in line:
+            collecting_vacations = True
+            continue
+        
+        if collecting_vacations and not line.startswith("**"):
+            parts = line.split("-", 1)
+            if len(parts) >= 2:
+                name = parts[0].strip()
+                dates = parts[1].strip()
+                result[name] = dates
+        
+        if collecting_vacations and line.startswith("**") and "Contractor Vacations" not in line:
+            collecting_vacations = False
+    
+    return result
+
+# Parse engagement notes
+def parse_engagement_notes():
+    engagement_notes
 
 # Function to match lawyers with a query
 def match_lawyers(data, query, top_n=5):
