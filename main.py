@@ -205,22 +205,30 @@ def process_bio_data(df):
     lawyers_bio = {}
     
     for _, row in df.iterrows():
-        full_name = f"{row['First Name'].strip()} {row['Last Name'].strip()}"
+        # Convert first and last names to string and handle NaN values
+        first_name = str(row['First Name']).strip() if pd.notna(row['First Name']) else ""
+        last_name = str(row['Last Name']).strip() if pd.notna(row['Last Name']) else ""
+        
+        full_name = f"{first_name} {last_name}".strip()
+        
+        # Skip empty names
+        if not full_name:
+            continue
         
         bio = {
-            'level': row['Level/Title'],
-            'call': row['Call'],
-            'jurisdiction': row['Jurisdiction'],
-            'location': row['Location'],
-            'practice_areas': row['Area of Practise + Add Info'],
-            'industry_experience': row['Industry Experience'],
-            'languages': row['Languages'],
-            'previous_in_house': row['Previous In-House Companies'],
-            'previous_firms': row['Previous Companies/Firms'],
-            'education': row['Education'],
-            'awards': row['Awards/Recognition'],
-            'notable_items': row['Notable Items/Personal Details '],
-            'expert': row['Expert']
+            'level': str(row['Level/Title']) if pd.notna(row['Level/Title']) else "",
+            'call': str(row['Call']) if pd.notna(row['Call']) else "",
+            'jurisdiction': str(row['Jurisdiction']) if pd.notna(row['Jurisdiction']) else "",
+            'location': str(row['Location']) if pd.notna(row['Location']) else "",
+            'practice_areas': str(row['Area of Practise + Add Info']) if pd.notna(row['Area of Practise + Add Info']) else "",
+            'industry_experience': str(row['Industry Experience']) if pd.notna(row['Industry Experience']) else "",
+            'languages': str(row['Languages']) if pd.notna(row['Languages']) else "",
+            'previous_in_house': str(row['Previous In-House Companies']) if pd.notna(row['Previous In-House Companies']) else "",
+            'previous_firms': str(row['Previous Companies/Firms']) if pd.notna(row['Previous Companies/Firms']) else "",
+            'education': str(row['Education']) if pd.notna(row['Education']) else "",
+            'awards': str(row['Awards/Recognition']) if pd.notna(row['Awards/Recognition']) else "",
+            'notable_items': str(row['Notable Items/Personal Details ']) if pd.notna(row['Notable Items/Personal Details ']) else "",
+            'expert': str(row['Expert']) if pd.notna(row['Expert']) else ""
         }
         
         lawyers_bio[full_name] = bio
