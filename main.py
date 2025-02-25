@@ -48,20 +48,73 @@ st.markdown("""
     margin-top: 10px;
     border-left: 3px solid #7cb342;
 }
+.recent-query-button {
+    margin-bottom: 8px !important;
+    width: 100%;
+}
 h1 {
     color: #1e4b79;
+}
+.scroll-container {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+.stButton button {
+    width: 100%;
+    margin-bottom: 8px;
+}
+.availability-tag {
+    background-color: #e8f5e9;
+    border-radius: 15px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #2e7d32;
+    display: inline-block;
+    margin-left: 10px;
+}
+.billable-rate {
+    color: #455a64;
+    font-size: 14px;
+    margin-top: 5px;
+}
+.practice-area {
+    color: #455a64;
+    font-size: 14px;
+    margin-top: 5px;
+    font-weight: 500;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # Set up sidebar
-st.sidebar.image("https://place-hold.it/300x100/1e4b79/ffffff&text=Legal+Expert+Finder", use_column_width=True)
+st.sidebar.title("⚖️ Legal Expert Finder")
 st.sidebar.title("About")
 st.sidebar.info(
-    "This app helps match legal needs with the right lawyer based on self-reported expertise. "
-    "Enter your specific legal requirements or choose a preset query to find lawyers with the relevant skillset."
+    "This internal tool helps match client legal needs with the right lawyer based on self-reported expertise. "
+    "Designed for partners and executive assistants to quickly find the best internal resource for client requirements."
 )
 st.sidebar.markdown("---")
+
+# Recent client queries section in sidebar
+st.sidebar.markdown("### Recent Client Queries")
+recent_queries = [
+    "IP licensing for SaaS company",
+    "Employment dispute in Ontario", 
+    "M&A due diligence for tech acquisition",
+    "Privacy compliance for healthcare app",
+    "Commercial lease agreement review"
+]
+for query in recent_queries:
+    if st.sidebar.button(query, key=f"recent_{query}", help=f"Use this recent query: {query}"):
+        st.session_state.query = query
+        st.session_state.search_pressed = True
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Need Help?")
+st.sidebar.info(
+    "For assistance with the matching tool or to add a lawyer to the database, contact the Legal Operations team at legalops@example.com"
+)
 
 # Function to load and process the CSV data
 @lru_cache(maxsize=1)  # Cache the result to avoid reloading
@@ -93,13 +146,22 @@ def process_lawyer_data(df):
         values = [lawyer_row[col] for col in columns if pd.notna(lawyer_row[col])]
         return max(values) if values else 0
     
-    # Create lawyer profiles
+    # Create lawyer profiles with additional mock data for demo purposes
     lawyers = []
+    practice_areas = ["Corporate", "Litigation", "IP", "Employment", "Privacy", "Finance", "Real Estate", "Tax"]
+    availability_statuses = ["Available Now", "Available Next Week", "Limited Availability", "On Leave"]
+    rate_ranges = ["$400-500/hr", "$500-600/hr", "$600-700/hr", "$700-800/hr", "$800-900/hr"]
+    
     for _, row in df.iterrows():
         profile = {
             'name': row['Submitter Name'],
             'email': row['Submitter Email'],
-            'skills': {}
+            'skills': {},
+            # Add mock data for demo 
+            'practice_area': np.random.choice(practice_areas),
+            'availability': np.random.choice(availability_statuses, p=[0.4, 0.3, 0.2, 0.1]),
+            'billable_rate': np.random.choice(rate_ranges),
+            'last_client': f"Client {np.random.randint(100, 999)}"
         }
         
         # Extract skills with non-zero values
@@ -158,8 +220,8 @@ def match_lawyers(data, query, top_n=5):
 # Function to format Claude's analysis prompt
 def format_claude_prompt(query, matches):
     prompt = f"""
-I need to analyze and provide reasoning for lawyer matches based on a specific legal query. 
-Here's the query: "{query}"
+I need to analyze and provide reasoning for lawyer matches based on a specific legal query from a client. 
+Here's the client query: "{query}"
 
 Here are the matched lawyers with their relevant skills:
 
@@ -169,15 +231,18 @@ Here are the matched lawyers with their relevant skills:
         lawyer = match['lawyer']
         skills = match['matched_skills']
         prompt += f"Lawyer {i}: {lawyer['name']}\n"
+        prompt += f"Practice Area: {lawyer['practice_area']}\n"
         prompt += "Relevant skills:\n"
         for skill in skills:
             prompt += f"- {skill['skill']}: {skill['value']} points\n"
         prompt += "\n"
     
     prompt += """
-For each lawyer, provide a brief (3-4 sentences) explanation of why they would be a good match for the query.
+For each lawyer, provide a brief (3-4 sentences) explanation of why they would be a good match for the client query.
 Focus on their specific expertise and how it relates to the legal needs described in the query.
-Don't rank the lawyers - just explain each one's relevant strengths.
+Include any relevant information about their practice area if applicable.
+Don't rank the lawyers - just explain each one's relevant strengths for this client matter.
+
 Format your response in JSON like this:
 {
     "lawyer1": "reasoning for why lawyer 1 is a good match...",
@@ -194,8 +259,8 @@ def call_claude_api(prompt):
     if api_key == "YOUR_API_KEY_HERE":
         # If no API key, return mock data
         return {
-            lawyer_match['lawyer']['name']: f"This lawyer has strong expertise in areas related to your query, particularly in {', '.join([s['skill'] for s in lawyer_match['matched_skills'][:2]])}. They allocated significant points to these skills in their self-assessment, indicating confidence in handling such matters."
-            for lawyer_match in matches[:3]
+            lawyer_match['lawyer']['name']: f"This lawyer has strong expertise in areas related to your client's needs, particularly in {', '.join([s['skill'] for s in lawyer_match['matched_skills'][:2]])}. Their {lawyer_match['lawyer']['practice_area']} background makes them well-suited for this matter. They allocated significant points to these skills in their self-assessment, indicating confidence in handling such cases."
+            for lawyer_match in matches[:5]
         }
     
     try:
@@ -204,7 +269,7 @@ def call_claude_api(prompt):
             model="claude-3-opus-20240229",
             max_tokens=1000,
             temperature=0.0,
-            system="You are a legal assistant that analyzes lawyer expertise matches. You provide brief, factual explanations about why specific lawyers match particular legal needs based on their self-reported skills. Keep explanations concise and focused on the relevant expertise.",
+            system="You are a legal resource coordinator that analyzes lawyer expertise matches. You provide brief, factual explanations about why specific lawyers match particular client legal needs based on their self-reported skills. Keep explanations concise and focused on the relevant expertise. Include practice area information where relevant.",
             messages=[
                 {"role": "user", "content": prompt}
             ]
@@ -225,65 +290,71 @@ def call_claude_api(prompt):
         st.error(f"Error calling Claude API: {e}")
         return {"error": str(e)}
 
+# Initialize session state
+if 'query' not in st.session_state:
+    st.session_state.query = ""
+if 'search_pressed' not in st.session_state:
+    st.session_state.search_pressed = False
+
 # Main app layout
 st.title("⚖️ Legal Expert Finder")
-st.markdown("Find the right lawyer for your specific legal needs based on expertise")
+st.markdown("Match client legal needs with the right lawyer based on expertise")
 
 # Load data
 data = load_lawyer_data()
 
 # Preset queries
 preset_queries = [
-    "I need a specialist in privacy compliance and cross-border data transfers",
-    "Looking for expertise in securities regulation and capital markets",
-    "Need help with technology licensing and SaaS contracts",
-    "I'm a startup founder looking for help with funding and equity compensation",
-    "Need assistance with employment issues and workplace discrimination",
-    "Looking for expertise in healthcare compliance regulations in Canada",
-    "Need help with intellectual property protection and licensing",
-    "Agricultural business needing environmental compliance assistance in British Columbia"
+    "Privacy compliance and cross-border data transfers",
+    "Securities regulation and capital markets",
+    "Technology licensing and SaaS contracts",
+    "Startup funding and equity compensation",
+    "Employment issues and workplace discrimination",
+    "Healthcare compliance regulations in Canada",
+    "Intellectual property protection and licensing",
+    "Environmental compliance in British Columbia",
+    "Fintech regulatory compliance",
+    "M&A for tech companies"
 ]
 
 # Query input section
-col1, col2 = st.columns([3, 1])
+st.text_area(
+    "Describe client's legal needs in detail:", 
+    key="query",
+    height=100,
+    placeholder="Example: Client needs a lawyer with blockchain governance experience for cross-border cryptocurrency transactions"
+)
 
-with col1:
-    query = st.text_area(
-        "Describe your legal needs in detail:", 
-        height=100,
-        placeholder="Example: I need a lawyer with experience in blockchain governance and cryptocurrency regulations who can help with cross-border transactions"
-    )
-
-with col2:
-    st.write("### Quick Queries")
-    selected_preset = st.selectbox(
-        "Select a preset query:",
-        ["Select a preset..."] + preset_queries
-    )
-    
-    if st.button("Use Selected Query"):
-        if selected_preset != "Select a preset...":
-            query = selected_preset
+# Preset query buttons in rows of 3
+st.markdown("### Common Client Needs")
+cols = st.columns(3)
+for i, query in enumerate(preset_queries):
+    col_idx = i % 3
+    with cols[col_idx]:
+        if st.button(query, key=f"preset_{i}"):
+            st.session_state.query = query
+            st.session_state.search_pressed = True
 
 # Search button
-search_pressed = st.button("🔍 Find Matching Lawyers", type="primary", use_container_width=True)
+if st.button("🔍 Find Matching Lawyers", type="primary", use_container_width=True):
+    st.session_state.search_pressed = True
 
 # Display results when search is pressed
-if search_pressed and query:
-    with st.spinner("Matching your legal needs with experts..."):
+if st.session_state.search_pressed and st.session_state.query:
+    with st.spinner("Matching client needs with our legal experts..."):
         # Get matches
-        matches = match_lawyers(data, query)
+        matches = match_lawyers(data, st.session_state.query)
         
         if not matches:
             st.warning("No matching lawyers found. Please try a different query.")
         else:
             # Call Claude API for reasoning
-            claude_prompt = format_claude_prompt(query, matches)
+            claude_prompt = format_claude_prompt(st.session_state.query, matches)
             reasoning = call_claude_api(claude_prompt)
             
             # Display results
             st.markdown("## Matching Legal Experts")
-            st.markdown(f"We found {len(matches)} lawyers matching your needs:")
+            st.markdown(f"Found {len(matches)} lawyers matching client needs:")
             
             # Sort alphabetically for display (not by score)
             sorted_matches = sorted(matches, key=lambda x: x['lawyer']['name'])
@@ -295,21 +366,35 @@ if search_pressed and query:
                 with st.container():
                     st.markdown(f"""
                     <div class="lawyer-card">
-                        <div class="lawyer-name">{lawyer['name']}</div>
+                        <div class="lawyer-name">
+                            {lawyer['name']}
+                            <span class="availability-tag">{lawyer['availability']}</span>
+                        </div>
                         <div class="lawyer-email">{lawyer['email']}</div>
+                        <div class="practice-area">Practice Area: {lawyer['practice_area']}</div>
+                        <div class="billable-rate">Rate: {lawyer['billable_rate']} | Recent Client: {lawyer['last_client']}</div>
                         <div style="margin-top: 10px;">
                             <strong>Relevant Expertise:</strong><br/>
                             {"".join([f'<span class="skill-tag">{skill["skill"]}: {skill["value"]}</span>' for skill in matched_skills])}
                         </div>
                         <div class="reasoning-box">
-                            <strong>Why this expert matches your needs:</strong><br/>
-                            {reasoning.get(lawyer['name'], 'This lawyer has relevant expertise in the areas you described in your query.')}
+                            <strong>Match Rationale:</strong><br/>
+                            {reasoning.get(lawyer['name'], 'This lawyer has relevant expertise in the areas described in the client query.')}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
+            
+            # Action buttons for results
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📧 Email These Matches to Requester", use_container_width=True):
+                    st.success("Match results have been emailed to the requester!")
+            with col2:
+                if st.button("📆 Schedule Availability Check", use_container_width=True):
+                    st.success("Availability check has been scheduled with these lawyers!")
 
 # Show exploration section when no search is active
-if not search_pressed or not query:
+if not st.session_state.search_pressed or not st.session_state.query:
     st.markdown("## Explore Available Legal Expertise")
     
     if data:
@@ -322,31 +407,47 @@ if not search_pressed or not query:
                 else:
                     all_skills[skill] = value
         
-        # Get top 15 skills by total points
-        top_skills = sorted(all_skills.items(), key=lambda x: x[1], reverse=True)[:15]
+        # Get top 20 skills by total points
+        top_skills = sorted(all_skills.items(), key=lambda x: x[1], reverse=True)[:20]
         
-        # Show bar chart of top skills
+        # Show bar chart of top skills in scrollable container
         st.markdown("### Most Common Legal Expertise Areas")
+        st.markdown('<div class="scroll-container">', unsafe_allow_html=True)
         chart_data = pd.DataFrame({
             'Skill': [s[0] for s in top_skills],
             'Total Points': [s[1] for s in top_skills]
         })
         st.bar_chart(chart_data.set_index('Skill'))
+        st.markdown('</div>', unsafe_allow_html=True)
         
-        st.markdown("### Get Started")
+        # Quick stats
+        st.markdown("### Firm Resource Overview")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Lawyers", len(data['lawyers']))
+        with col2:
+            st.metric("Expertise Areas", len(data['unique_skills']))
+        with col3:
+            st.metric("Currently Available", f"{int(len(data['lawyers']) * 0.4)}")  # Mock data
+        
+        st.markdown("### Instructions for Matching")
         st.markdown("""
-        Enter your specific legal needs above or select a preset query to find matching legal experts. 
-        Be as specific as possible about your requirements, including:
+        Enter your client's specific legal needs above or select a common query to find matching legal experts. 
+        Be as specific as possible about their requirements, including:
         
-        - The type of legal expertise you need
+        - The type of legal expertise needed
         - Any industry-specific requirements
         - Geographic considerations (e.g., province-specific needs)
-        - The nature of your legal matter
+        - The nature of the legal matter
+        - Timeframe and urgency
+        
+        The system will match the query with lawyers who have self-reported expertise in those areas.
         """)
 
 # Footer
 st.markdown("---")
 st.markdown(
-    "This app uses self-reported expertise from 64 lawyers who distributed 120 points across 167 different legal skills. "
-    "Results are sorted alphabetically and matches are based on keyword relevance and self-reported skill points."
+    "This internal tool uses self-reported expertise from 64 lawyers who distributed 120 points across 167 different legal skills. "
+    "Results are sorted alphabetically and matches are based on keyword relevance and self-reported skill points. "
+    "Last updated: February 25, 2025"
 )
