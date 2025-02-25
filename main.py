@@ -152,34 +152,6 @@ h1 {
 </style>
 """, unsafe_allow_html=True)
 
-# Set up sidebar
-st.sidebar.title("⚖️ Legal Expert Finder")
-st.sidebar.title("About")
-st.sidebar.info(
-    "This internal tool helps match client legal needs with the right lawyer based on self-reported expertise. "
-    "Designed for partners and executive assistants to quickly find the best internal resource for client requirements."
-)
-st.sidebar.markdown("---")
-
-# Recent client queries section in sidebar
-st.sidebar.markdown("### Recent Client Queries")
-recent_queries = [
-    "IP licensing for SaaS company",
-    "Employment dispute in Ontario", 
-    "M&A due diligence for tech acquisition",
-    "Privacy compliance for healthcare app",
-    "Commercial lease agreement review"
-]
-for query in recent_queries:
-    if st.sidebar.button(query, key=f"recent_{query}", help=f"Use this recent query: {query}"):
-        set_query(query)
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### Need Help?")
-st.sidebar.info(
-    "For assistance with the matching tool or to add a lawyer to the database, contact the Legal Operations team at legalops@example.com"
-)
-
 # Function to load and process the CSV data
 @lru_cache(maxsize=1)  # Cache the result to avoid reloading
 def load_lawyer_data():
@@ -948,33 +920,45 @@ def call_claude_api(prompt):
         
         # Return a fallback response
         return {"error": f"API error: {str(e)}"}
-
-        
-        # Extract JSON from response
-        import json
-        response_text = message.content[0].text
-        # Find JSON part in the response
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(0)
-            return json.loads(json_str)
-        else:
-            return {"error": "Could not extract JSON from Claude's response"}
-            
-    except Exception as e:
-        st.error(f"Error calling Claude API: {e}")
-        return {"error": str(e)}
-
+    
 # Initialize session state variables
 if 'query' not in st.session_state:
     st.session_state['query'] = ""
 if 'search_pressed' not in st.session_state:
     st.session_state['search_pressed'] = False
 
-# Helper function to set the query and trigger search
+# Helper function to set the query and trigger search - MOVED HERE TO FIX THE ERROR
 def set_query(text):
     st.session_state['query'] = text
     st.session_state['search_pressed'] = True
+
+# Set up sidebar - MOVED FROM ORIGINAL LOCATION
+st.sidebar.title("⚖️ Legal Expert Finder")
+st.sidebar.title("About")
+st.sidebar.info(
+    "This internal tool helps match client legal needs with the right lawyer based on self-reported expertise. "
+    "Designed for partners and executive assistants to quickly find the best internal resource for client requirements."
+)
+st.sidebar.markdown("---")
+
+# Recent client queries section in sidebar
+st.sidebar.markdown("### Recent Client Queries")
+recent_queries = [
+    "IP licensing for SaaS company",
+    "Employment dispute in Ontario", 
+    "M&A due diligence for tech acquisition",
+    "Privacy compliance for healthcare app",
+    "Commercial lease agreement review"
+]
+for query in recent_queries:
+    if st.sidebar.button(query, key=f"recent_{query}", help=f"Use this recent query: {query}"):
+        set_query(query)
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Need Help?")
+st.sidebar.info(
+    "For assistance with the matching tool or to add a lawyer to the database, contact the Legal Operations team at legalops@example.com"
+)
 
 # Main app layout
 st.title("⚖️ Legal Expert Finder")
