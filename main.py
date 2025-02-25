@@ -634,9 +634,16 @@ def match_lawyers(data, query, top_n=5):
     # Convert query to lowercase for case-insensitive matching
     lower_query = query.lower()
     
+    # Test users to exclude
+    excluded_users = ["Ankita", "Test", "Tania"]
+    
     # Calculate match scores for each lawyer
     matches = []
     for lawyer in data['lawyers']:
+        # Skip test users
+        if any(excluded_name in lawyer['name'] for excluded_name in excluded_users):
+            continue
+            
         score = 0
         matched_skills = []
         
@@ -704,6 +711,7 @@ def call_claude_api(prompt):
         }
     
     try:
+        # Create Claude client without any proxy settings
         client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
             model="claude-3-opus-20240229",
