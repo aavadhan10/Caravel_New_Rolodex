@@ -870,25 +870,8 @@ if st.session_state['search_pressed'] and st.session_state['query']:
                 matched_skills = match['matched_skills']
                 
                 with st.container():
-                    # Prepare availability info
-                    availability_class = "availability-tag"
-                    if "Limited" in lawyer['availability'] or "Vacation" in lawyer['availability']:
-                        availability_class = "availability-tag-limited"
-                    elif "Available" in lawyer['availability']:
-                        availability_class = "availability-tag-available"
-                    
-                    # Prepare vacation info if any
-                    vacation_info = ""
-                    if lawyer['vacation']:
-                        vacation_dates = ", ".join(lawyer['vacation']) if isinstance(lawyer['vacation'], list) else lawyer['vacation']
-                        vacation_info = f"<div class='vacation-info'>Vacation: {vacation_dates}</div>"
-                    
-                    # Prepare engagement note if any
-                    engagement_info = ""
-                    if lawyer['engagement_note']:
-                        engagement_info = f"<div class='engagement-note'>{lawyer['engagement_note']}</div>"
-                    
-                    st.markdown(f"""
+                    # Use raw HTML string concatenation to avoid Streamlit escaping issues
+                    html_output = f"""
                     <div class="lawyer-card">
                         <div class="lawyer-name">
                             {lawyer['name']}
@@ -896,12 +879,27 @@ if st.session_state['search_pressed'] and st.session_state['query']:
                         </div>
                         <div class="lawyer-email">{lawyer['email']}</div>
                         <div class="practice-area">Practice Area: {lawyer['practice_area']}</div>
-                        <div class="availability-details">
-                            {f"Days available: {lawyer['days_available']} | " if lawyer['days_available'] is not None else ""}
-                            {f"Hours available: {lawyer['hours_available']}" if lawyer['hours_available'] is not None else ""}
-                            {vacation_info}
-                            {engagement_info}
-                        </div>
+                    """
+                    
+                    # Add availability details
+                    html_output += '<div class="availability-details">'
+                    if lawyer['days_available'] is not None:
+                        html_output += f"Days available: {lawyer['days_available']} | "
+                    if lawyer['hours_available'] is not None:
+                        html_output += f"Hours available: {lawyer['hours_available']}"
+                    html_output += '</div>'
+                    
+                    # Add vacation info
+                    if lawyer['vacation']:
+                        vacation_dates = ", ".join(lawyer['vacation']) if isinstance(lawyer['vacation'], list) else lawyer['vacation']
+                        html_output += f'<div class="vacation-info">Vacation: {vacation_dates}</div>'
+                    
+                    # Add engagement note
+                    if lawyer['engagement_note']:
+                        html_output += f'<div class="engagement-note">{lawyer["engagement_note"]}</div>'
+                    
+                    # Add the rest of the card
+                    html_output += f"""
                         <div class="billable-rate">Rate: {lawyer['billable_rate']} | Recent Client: {lawyer['last_client']}</div>
                         <div style="margin-top: 10px;">
                             <strong>Relevant Expertise:</strong><br/>
@@ -912,7 +910,10 @@ if st.session_state['search_pressed'] and st.session_state['query']:
                             {reasoning.get(lawyer['name'], 'This lawyer has relevant expertise in the areas described in the client query.')}
                         </div>
                     </div>
-                    """, unsafe_allow_html=True)
+                    """
+                    
+                    # Render the HTML
+                    st.markdown(html_output, unsafe_allow_html=True)
             
             # Action buttons for results
             col1, col2 = st.columns(2)
