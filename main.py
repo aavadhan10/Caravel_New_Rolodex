@@ -703,17 +703,31 @@ Format your response in JSON like this:
 def call_claude_api(prompt):
     api_key = os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE")
     
+    # Handle the case where no API key is provided
     if api_key == "YOUR_API_KEY_HERE":
-        # If no API key, return mock data
-        return {
-            lawyer_match['lawyer']['name']: f"This lawyer has strong expertise in areas related to your client's needs, particularly in {', '.join([s['skill'] for s in lawyer_match['matched_skills'][:2]])}. Their {lawyer_match['lawyer']['practice_area']} background makes them well-suited for this matter. They allocated significant points to these skills in their self-assessment, indicating confidence in handling such cases."
-            for lawyer_match in matches[:5]
-        }
+        # Return mock reasoning data for the lawyers
+        try:
+            return {
+                match['lawyer']['name']: f"This lawyer has strong expertise in areas related to your client's needs, particularly in {', '.join([s['skill'] for s in match['matched_skills'][:2]])}. Their {match['lawyer']['practice_area']} background makes them well-suited for this matter. They allocated significant points to these skills in their self-assessment, indicating confidence in handling such cases."
+                for match in matches[:5]
+            }
+        except NameError:
+            # Fallback if 'matches' is not defined in this scope
+            return {"Error": "No API key provided and could not generate mock data"}
     
     try:
-        # Create Claude client without any proxy settings
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
+        # Import anthropic here to handle any import issues
+        try:
+            from anthropic import Anthropic
+        except ImportError:
+            st.error("Could not import Anthropic client. Please ensure it's installed: pip install anthropic==0.18.0")
+            return {"Error": "Anthropic client not available"}
+        
+        # Create the client with minimal configuration
+        client = Anthropic(api_key=api_key)
+        
+        # Make the API call
+        response = client.messages.create(
             model="claude-3-opus-20240229",
             max_tokens=1000,
             temperature=0.0,
@@ -722,6 +736,30 @@ def call_claude_api(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
+        
+        # Extract JSON from response
+        import json
+        import re
+        
+        response_text = response.content[0].text
+        # Find JSON part in the response
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0)
+            return json.loads(json_str)
+        else:
+            return {"error": "Could not extract JSON from Claude's response"}
+            
+    except Exception as e:
+        st.error(f"Error calling Claude API: {str(e)}")
+        
+        # Provide a more detailed error message to help debugging
+        import traceback
+        st.error(f"Error details: {traceback.format_exc()}")
+        
+        # Return a fallback response
+        return {"error": f"API error: {str(e)}"}
+
         
         # Extract JSON from response
         import json
