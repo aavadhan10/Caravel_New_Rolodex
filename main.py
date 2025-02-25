@@ -699,7 +699,7 @@ Format your response in JSON like this:
 """
     return prompt
 
-# Function to call Claude API
+# Function to call Claude API using requests instead of anthropic client
 def call_claude_api(prompt):
     api_key = os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE")
     
@@ -716,39 +716,49 @@ def call_claude_api(prompt):
             return {"Error": "No API key provided and could not generate mock data"}
     
     try:
-        # Import anthropic here to handle any import issues
-        try:
-            from anthropic import Anthropic
-        except ImportError:
-            st.error("Could not import Anthropic client. Please ensure it's installed: pip install anthropic==0.18.0")
-            return {"Error": "Anthropic client not available"}
+        # Import just what we need to make an HTTP request
+        import requests
+        import json
         
-        # Create the client with minimal configuration
-        client = Anthropic(api_key=api_key)
+        # Claude API endpoint
+        url = "https://api.anthropic.com/v1/messages"
         
-        # Make the API call
-        response = client.messages.create(
-            model="claude-3-opus-20240229",
-            max_tokens=1000,
-            temperature=0.0,
-            system="You are a legal resource coordinator that analyzes lawyer expertise matches. You provide brief, factual explanations about why specific lawyers match particular client legal needs based on their self-reported skills. Keep explanations concise and focused on the relevant expertise. Include practice area information where relevant.",
-            messages=[
+        # Headers
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+        
+        # Request payload
+        payload = {
+            "model": "claude-3-opus-20240229",
+            "max_tokens": 1000,
+            "temperature": 0.0,
+            "system": "You are a legal resource coordinator that analyzes lawyer expertise matches. You provide brief, factual explanations about why specific lawyers match particular client legal needs based on their self-reported skills. Keep explanations concise and focused on the relevant expertise. Include practice area information where relevant.",
+            "messages": [
                 {"role": "user", "content": prompt}
             ]
-        )
+        }
         
-        # Extract JSON from response
-        import json
-        import re
+        # Make the request
+        response = requests.post(url, headers=headers, json=payload)
         
-        response_text = response.content[0].text
-        # Find JSON part in the response
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(0)
-            return json.loads(json_str)
+        # Check for successful response
+        if response.status_code == 200:
+            response_json = response.json()
+            response_text = response_json.get("content", [{}])[0].get("text", "")
+            
+            # Find JSON part in the response
+            import re
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                return json.loads(json_str)
+            else:
+                return {"error": "Could not extract JSON from Claude's response"}
         else:
-            return {"error": "Could not extract JSON from Claude's response"}
+            return {"error": f"API call failed with status code {response.status_code}: {response.text}"}
             
     except Exception as e:
         st.error(f"Error calling Claude API: {str(e)}")
