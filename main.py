@@ -65,6 +65,15 @@ h1 {
     margin-bottom: 8px;
 }
 .availability-tag {
+    background-color: #ffecb3;
+    border-radius: 15px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #ff6f00;
+    display: inline-block;
+    margin-left: 10px;
+}
+.availability-tag-available {
     background-color: #e8f5e9;
     border-radius: 15px;
     padding: 4px 8px;
@@ -72,6 +81,32 @@ h1 {
     color: #2e7d32;
     display: inline-block;
     margin-left: 10px;
+}
+.availability-tag-limited {
+    background-color: #ffecb3;
+    border-radius: 15px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #ff6f00;
+    display: inline-block;
+    margin-left: 10px;
+}
+.vacation-info {
+    color: #d32f2f;
+    font-size: 13px;
+    margin-top: 3px;
+    font-style: italic;
+}
+.engagement-note {
+    color: #455a64;
+    font-size: 13px;
+    margin-top: 3px;
+    font-style: italic;
+}
+.availability-details {
+    color: #455a64;
+    font-size: 14px;
+    margin-top: 5px;
 }
 .billable-rate {
     color: #455a64;
@@ -107,8 +142,7 @@ recent_queries = [
 ]
 for query in recent_queries:
     if st.sidebar.button(query, key=f"recent_{query}", help=f"Use this recent query: {query}"):
-        st.session_state.query = query
-        st.session_state.search_pressed = True
+        set_query(query)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Need Help?")
@@ -404,6 +438,14 @@ def parse_days_availability():
     
     return result
 
+# Function to get top skills for a lawyer
+def get_top_skills(lawyer, limit=5):
+    return sorted(
+        [{'skill': skill, 'value': value} for skill, value in lawyer['skills'].items()],
+        key=lambda x: x['value'],
+        reverse=True
+    )[:limit]
+
 # Parse hours availability data
 def parse_hours_availability():
     hours_available_text = """
@@ -548,7 +590,41 @@ def parse_vacations():
 
 # Parse engagement notes
 def parse_engagement_notes():
-    engagement_notes
+    engagement_notes_text = """
+    **Lawyer and Fractional Updates to Note:**
+    * Bernadette Saumur indicates that her engagement with GTAA will conclude at the end of February
+    * Wendy Bach indicates that her engagement will conclude in Mid-April
+    * Rose Oushalkas indicates that her engagement with Seaboard may conclude at the end of February
+    * Mark Wainman indicates that he anticipates his engagement will end October of this year
+    * Jason Lakhan indicates that he is not currently in an engagement
+    * Mitch Mostyn indicates that his engagement with Magna will reduce to 20 hours/month in March, and then will move to ad hoc in April
+    * Wanda Shreve indicates that she anticipates her engagement will continue into the Spring/Summer
+    * Jim Papamanolis indicates that he anticipates his fractional will end at the end of May
+    * Ernie Belyea indicates that his engagement has been extended through the remainder of 2025
+    * Aliza Dason indicates that her engagement will continue through the remainder of 2025
+    """
+    
+    lines = engagement_notes_text.split('\n')
+    result = {}
+    collecting_notes = False
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        if "**Lawyer and Fractional Updates to Note:**" in line:
+            collecting_notes = True
+            continue
+        
+        if collecting_notes and line.startswith("*"):
+            note = line[1:].strip()
+            name_match = re.match(r'([^-]*?)indicates', note)
+            if name_match:
+                name = name_match.group(1).strip()
+                result[name] = note
+    
+    return result
 
 # Function to match lawyers with a query
 def match_lawyers(data, query, top_n=5):
@@ -654,11 +730,16 @@ def call_claude_api(prompt):
         st.error(f"Error calling Claude API: {e}")
         return {"error": str(e)}
 
-# Initialize session state
+# Initialize session state variables
 if 'query' not in st.session_state:
-    st.session_state.query = ""
+    st.session_state['query'] = ""
 if 'search_pressed' not in st.session_state:
-    st.session_state.search_pressed = False
+    st.session_state['search_pressed'] = False
+
+# Helper function to set the query and trigger search
+def set_query(text):
+    st.session_state['query'] = text
+    st.session_state['search_pressed'] = True
 
 # Main app layout
 st.title("⚖️ Legal Expert Finder")
@@ -682,38 +763,43 @@ preset_queries = [
 ]
 
 # Query input section
-st.text_area(
+query = st.text_area(
     "Describe client's legal needs in detail:", 
-    key="query",
+    value=st.session_state['query'],
     height=100,
-    placeholder="Example: Client needs a lawyer with blockchain governance experience for cross-border cryptocurrency transactions"
+    placeholder="Example: Client needs a lawyer with blockchain governance experience for cross-border cryptocurrency transactions",
+    key="query_input"
 )
 
 # Preset query buttons in rows of 3
 st.markdown("### Common Client Needs")
 cols = st.columns(3)
-for i, query in enumerate(preset_queries):
+for i, preset_query in enumerate(preset_queries):
     col_idx = i % 3
     with cols[col_idx]:
-        if st.button(query, key=f"preset_{i}"):
-            st.session_state.query = query
-            st.session_state.search_pressed = True
+        if st.button(preset_query, key=f"preset_{i}"):
+            set_query(preset_query)
+
+# Update query in session state from text area
+if query:
+    st.session_state['query'] = query
 
 # Search button
-if st.button("🔍 Find Matching Lawyers", type="primary", use_container_width=True):
-    st.session_state.search_pressed = True
+search_pressed = st.button("🔍 Find Matching Lawyers", type="primary", use_container_width=True)
+if search_pressed:
+    st.session_state['search_pressed'] = True
 
 # Display results when search is pressed
-if st.session_state.search_pressed and st.session_state.query:
+if st.session_state['search_pressed'] and st.session_state['query']:
     with st.spinner("Matching client needs with our legal experts..."):
         # Get matches
-        matches = match_lawyers(data, st.session_state.query)
+        matches = match_lawyers(data, st.session_state['query'])
         
         if not matches:
             st.warning("No matching lawyers found. Please try a different query.")
         else:
             # Call Claude API for reasoning
-            claude_prompt = format_claude_prompt(st.session_state.query, matches)
+            claude_prompt = format_claude_prompt(st.session_state['query'], matches)
             reasoning = call_claude_api(claude_prompt)
             
             # Display results
@@ -728,14 +814,38 @@ if st.session_state.search_pressed and st.session_state.query:
                 matched_skills = match['matched_skills']
                 
                 with st.container():
+                    # Prepare availability info
+                    availability_class = "availability-tag"
+                    if "Limited" in lawyer['availability'] or "Vacation" in lawyer['availability']:
+                        availability_class = "availability-tag-limited"
+                    elif "Available" in lawyer['availability']:
+                        availability_class = "availability-tag-available"
+                    
+                    # Prepare vacation info if any
+                    vacation_info = ""
+                    if lawyer['vacation']:
+                        vacation_dates = ", ".join(lawyer['vacation']) if isinstance(lawyer['vacation'], list) else lawyer['vacation']
+                        vacation_info = f"<div class='vacation-info'>Vacation: {vacation_dates}</div>"
+                    
+                    # Prepare engagement note if any
+                    engagement_info = ""
+                    if lawyer['engagement_note']:
+                        engagement_info = f"<div class='engagement-note'>{lawyer['engagement_note']}</div>"
+                    
                     st.markdown(f"""
                     <div class="lawyer-card">
                         <div class="lawyer-name">
                             {lawyer['name']}
-                            <span class="availability-tag">{lawyer['availability']}</span>
+                            <span class="{availability_class}">{lawyer['availability']}</span>
                         </div>
                         <div class="lawyer-email">{lawyer['email']}</div>
                         <div class="practice-area">Practice Area: {lawyer['practice_area']}</div>
+                        <div class="availability-details">
+                            {f"Days available: {lawyer['days_available']} | " if lawyer['days_available'] is not None else ""}
+                            {f"Hours available: {lawyer['hours_available']}" if lawyer['hours_available'] is not None else ""}
+                            {vacation_info}
+                            {engagement_info}
+                        </div>
                         <div class="billable-rate">Rate: {lawyer['billable_rate']} | Recent Client: {lawyer['last_client']}</div>
                         <div style="margin-top: 10px;">
                             <strong>Relevant Expertise:</strong><br/>
@@ -758,7 +868,7 @@ if st.session_state.search_pressed and st.session_state.query:
                     st.success("Availability check has been scheduled with these lawyers!")
 
 # Show exploration section when no search is active
-if not st.session_state.search_pressed or not st.session_state.query:
+if not st.session_state['search_pressed'] or not st.session_state['query']:
     st.markdown("## Explore Available Legal Expertise")
     
     if data:
