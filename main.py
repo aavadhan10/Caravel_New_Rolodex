@@ -2,10 +2,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
-import anthropic
 import re
 import json
 from functools import lru_cache
+import requests
 
 # Import the domain expertise functions from legal_domains.py
 from legal_domains import match_lawyers_with_domain_expertise, LEGAL_DOMAINS, identify_query_domains
@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS for styling (same as before)
+# CSS for styling
 st.markdown("""
 <style>
 .lawyer-card {
@@ -162,10 +162,92 @@ h1 {
     margin-top: 5px;
     color: #333;
 }
+.practice-area-filter {
+    background-color: #e3f2fd;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #bbdefb;
+}
+.practice-area-title {
+    font-weight: bold;
+    color: #1976d2;
+    margin-bottom: 10px;
+}
+.practice-area-note {
+    font-size: 13px;
+    color: #546e7a;
+    font-style: italic;
+    margin-top: 5px;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# Function to load and process the CSV data (same as before)
+# Function to add practice area filter
+def add_practice_area_filter():
+    """
+    Creates a dropdown for users to select the practice area
+    """
+    # List of practice areas based on the domains in the code
+    practice_areas = [
+        "Select Practice Area (Optional)",
+        "Administrative Law",
+        "Aviation Law",
+        "Banking & Finance",
+        "Bankruptcy Law",
+        "Civil Litigation",
+        "Civil Rights",
+        "Commercial Transactions",
+        "Communications Law",
+        "Construction Law",
+        "Corporate Law",
+        "Criminal Law",
+        "Education Law",
+        "Elder Law",
+        "Employee Benefits",
+        "Employment & Labor Law",
+        "Entertainment/Sports Law",
+        "Environmental Law",
+        "Family Law",
+        "Government Relations",
+        "Health Care Law",
+        "Immigration",
+        "Insurance Defense",
+        "Intellectual Property",
+        "International Practice",
+        "Medical Malpractice",
+        "Municipal Law",
+        "Personal Injury",
+        "Privacy Law",
+        "Probate & Estate Planning",
+        "Products Liability",
+        "Real Estate",
+        "Securities Law", 
+        "Tax Law",
+        "Technology Law",
+        "Tribal/Indian Law",
+        "Workers' Compensation"
+    ]
+    
+    # Create a container with custom styling for the practice area filter
+    with st.container():
+        st.markdown('<div class="practice-area-filter">', unsafe_allow_html=True)
+        st.markdown('<div class="practice-area-title">Practice Area Filter</div>', unsafe_allow_html=True)
+        
+        # Create the dropdown filter
+        selected_area = st.selectbox(
+            "What practice area does this legal need fall under?",
+            practice_areas,
+            index=0
+        )
+        
+        st.markdown('<div class="practice-area-note">Selecting a specific practice area will help find the most relevant lawyers.</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Return None if default option, otherwise return the selected area
+    return None if selected_area == "Select Practice Area (Optional)" else selected_area
+
+# Function to load and process the CSV data
 @lru_cache(maxsize=1)
 def load_lawyer_data():
     try:
@@ -185,9 +267,8 @@ def load_lawyer_data():
         st.error(f"Error loading data: {e}")
         return None
 
-# Function to process the biographical data (same as before)
+# Function to process the biographical data
 def process_bio_data(df):
-    # [This function remains the same]
     lawyers_bio = {}
     
     for _, row in df.iterrows():
@@ -223,9 +304,8 @@ def process_bio_data(df):
         'lawyers_bio': lawyers_bio
     }
 
-# Function to combine skills and biographical data (same as before)
+# Function to combine skills and biographical data
 def combine_lawyer_data(skills_data, bio_data):
-    # [This function remains the same]
     if not skills_data or not bio_data:
         return skills_data
     
@@ -340,7 +420,7 @@ def process_lawyer_data(df):
         'unique_skills': list(skill_map.keys())
     }
 
-# All the availability-related functions remain the same
+# All the availability-related functions
 def get_lawyer_availability():
     # Real availability data parsed from the provided information
     days_available = parse_days_availability()
@@ -398,9 +478,8 @@ def get_lawyer_availability():
     
     return lawyer_availability
 
-# Function to get availability for a specific lawyer (same as before)
+# Function to get availability for a specific lawyer
 def get_availability_for_lawyer(name):
-    # [This function remains the same]
     availability_data = get_lawyer_availability()
     
     # Check for exact match
@@ -419,9 +498,8 @@ def get_availability_for_lawyer(name):
         'hours': None
     }
 
-# Function to generate availability status (same as before)
+# Function to generate availability status
 def generate_availability_status(lawyer_data):
-    # [This function remains the same]
     # Current date is now February 26, 2025
     current_date = '2025-02-26'
     
@@ -471,9 +549,8 @@ def generate_availability_status(lawyer_data):
     
     return "Status Unknown"
 
-# All the parser functions remain the same
+# All the parser functions
 def parse_days_availability():
-    # [Implementation remains the same]
     days_available_text = """
     **5 days**
     **4 days**
@@ -552,7 +629,6 @@ def parse_days_availability():
     return result
 
 def parse_hours_availability():
-    # [Implementation remains the same]
     hours_available_text = """
     **80+ hours**
     **80 hours**
@@ -634,7 +710,6 @@ def parse_hours_availability():
     return result
 
 def parse_vacations():
-    # [Implementation remains the same]
     vacation_text = """
     **Contractor Vacations:**
     David Zender- Feb 2- Mar 7
@@ -686,7 +761,6 @@ def parse_vacations():
     return result
 
 def parse_engagement_notes():
-    # [Implementation remains the same]
     engagement_notes_text = """
     **Lawyer and Fractional Updates to Note:**
     Bernadette Saumur's fractional will be concluding.
@@ -758,7 +832,7 @@ def parse_engagement_notes():
     
     return result
 
-# Function to get top skills for a lawyer (same as before)
+# Function to get top skills for a lawyer
 def get_top_skills(lawyer, limit=5):
     return sorted(
         [{'skill': skill, 'value': value} for skill, value in lawyer['skills'].items()],
@@ -766,24 +840,57 @@ def get_top_skills(lawyer, limit=5):
         reverse=True
     )[:limit]
 
-# NEW: Updated match_lawyers function that uses the legal_domains.py module
-def match_lawyers(data, query, top_n=5):
+# NEW: Updated match_lawyers function that includes practice area filtering
+def match_lawyers(data, query, practice_area_filter=None, top_n=5):
     """
-    Matches lawyers to a query using domain-specific legal expertise
+    Matches lawyers to a query using domain-specific legal expertise with practice area filtering
     """
+    if not data:
+        return []
+        
+    # First, filter by practice area if specified
+    if practice_area_filter:
+        # Create a filtered dataset with only lawyers matching the practice area
+        filtered_lawyers = []
+        for lawyer in data['lawyers']:
+            # Match if the practice area contains the filter term or vice versa
+            if (practice_area_filter.lower() in lawyer['practice_area'].lower() or
+                any(practice_area_filter.lower() in domain.lower() for domain in lawyer.get('bio', {}).get('practice_areas', '').split(','))):
+                filtered_lawyers.append(lawyer)
+        
+        filtered_data = {
+            'lawyers': filtered_lawyers,
+            'skill_map': data['skill_map'],
+            'unique_skills': data['unique_skills']
+        }
+        
+        # If no lawyers match the practice area, show a message and return empty
+        if not filtered_lawyers:
+            st.warning(f"No lawyers found with practice area: {practice_area_filter}. Try another practice area or search all lawyers.")
+            return []
+            
+        # Now use the filtered data for matching
+        matching_data = filtered_data
+    else:
+        # Use all lawyers if no practice area filter
+        matching_data = data
+    
     # Use the enhanced domain-based matching algorithm imported from legal_domains.py
-    return match_lawyers_with_domain_expertise(data, query, top_n)
+    return match_lawyers_with_domain_expertise(matching_data, query, top_n)
 
 # Function to format Claude's analysis prompt (updated to include domain information)
-def format_claude_prompt(query, matches):
+def format_claude_prompt(query, matches, practice_area_filter=None):
     prompt = f"""
 I need to analyze and provide detailed reasoning for why specific lawyers match a client's legal needs based on their expertise, skills, and background.
 
 Client's Legal Need: "{query}"
-
-Here are the matching lawyers with their skills and biographical information:
-
 """
+
+    # Include practice area if specified
+    if practice_area_filter:
+        prompt += f"\nSpecified Practice Area: {practice_area_filter}\n"
+    
+    prompt += "\nHere are the matching lawyers with their skills and biographical information:\n\n"
     
     for i, match in enumerate(matches, 1):
         lawyer = match['lawyer']
@@ -792,6 +899,9 @@ Here are the matching lawyers with their skills and biographical information:
         
         prompt += f"LAWYER {i}: {lawyer['name']}\n"
         prompt += "---------------------------------------------\n"
+        
+        # Add practice area first for emphasis
+        prompt += f"PRACTICE AREA: {lawyer['practice_area']}\n\n"
         
         # Add skills information
         prompt += "RELEVANT SKILLS:\n"
@@ -846,11 +956,12 @@ Here are the matching lawyers with their skills and biographical information:
 For each lawyer, provide a DETAILED explanation (at least 3-4 sentences) of why they would be an excellent match for this client need. Focus primarily on their skills and expertise rather than biographical information.
 
 IMPORTANT: Your analysis should adhere to these strict guidelines:
-1. ONLY highlight skills that EXACTLY match the specific domain expertise required (e.g., "healthcare compliance" not just general "compliance")
-2. DO NOT make unsupported assumptions about transferable skills across different legal domains
-3. If a lawyer has expertise in a related but not exact area, clearly acknowledge the limitation (e.g., "While they have experience in financial compliance, their profile doesn't show specific healthcare compliance expertise")
-4. Focus on the lawyer's self-reported skill areas and values that directly address the client's specific needs
-5. Mention availability when relevant to taking on this work
+1. EMPHASIZE how their PRACTICE AREA aligns with the client's needs
+2. ONLY highlight skills that EXACTLY match the specific domain expertise required (e.g., "healthcare compliance" not just general "compliance")
+3. DO NOT make unsupported assumptions about transferable skills across different legal domains
+4. If a lawyer has expertise in a related but not exact area, clearly acknowledge the limitation
+5. Focus on the lawyer's self-reported skill areas and values that directly address the client's specific needs
+6. Mention availability when relevant to taking on this work
 
 Be honest and precise about matching. It's better to acknowledge limitations than to overstate expertise in areas not supported by their skill profile.
 
@@ -863,7 +974,7 @@ Format your response in JSON like this:
 """
     return prompt
 
-# Function to call Claude API using requests instead of anthropic client
+# Function to call Claude API using requests
 def call_claude_api(prompt):
     api_key = os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE")
     
@@ -934,7 +1045,7 @@ def call_claude_api(prompt):
         # Return a fallback response
         return {"error": f"API error: {str(e)}"}
 
-# IMPROVED: Callback function to set query and trigger search
+# Callback function to set query and trigger search
 def set_query_and_search(text):
     st.session_state['query'] = text
     st.session_state['search_pressed'] = True
@@ -946,6 +1057,8 @@ if 'query' not in st.session_state:
     st.session_state['query'] = ""
 if 'search_pressed' not in st.session_state:
     st.session_state['search_pressed'] = False
+if 'practice_area_filter' not in st.session_state:
+    st.session_state['practice_area_filter'] = None
     
 # Set up sidebar
 st.sidebar.title("⚖️ Legal Expert Finder")
@@ -982,6 +1095,13 @@ st.markdown("Match client legal needs with the right lawyer based on expertise")
 # Load data
 data = load_lawyer_data()
 
+# NEW: Add practice area filter at the top
+selected_practice_area = add_practice_area_filter()
+
+# Save the selected practice area in session state
+if selected_practice_area:
+    st.session_state['practice_area_filter'] = selected_practice_area
+
 # Preset queries
 preset_queries = [
     "Privacy compliance and cross-border data transfers",
@@ -1011,7 +1131,7 @@ cols = st.columns(3)
 for i, preset_query in enumerate(preset_queries):
     col_idx = i % 3
     with cols[col_idx]:
-        # IMPROVED: Use set_query_and_search for immediate refresh
+        # Use set_query_and_search for immediate refresh
         if st.button(preset_query, key=f"preset_{i}"):
             set_query_and_search(preset_query)
 
@@ -1029,28 +1149,38 @@ if search_pressed:
 # Display results when search is pressed
 if st.session_state['search_pressed'] and st.session_state['query']:
     with st.spinner("Matching client needs with our legal experts..."):
-        # Get matches with improved matching algorithm
-        matches = match_lawyers(data, st.session_state['query'])
+        # Get practice area filter from session state
+        practice_area_filter = st.session_state.get('practice_area_filter')
+        
+        # Get matches with improved matching algorithm that includes practice area filtering
+        matches = match_lawyers(data, st.session_state['query'], practice_area_filter=practice_area_filter)
         
         if not matches:
-            st.warning("No matching lawyers found. Please try a different query.")
+            if practice_area_filter:
+                st.warning(f"No matching lawyers found with practice area '{practice_area_filter}'. Try a different practice area or remove the filter.")
+            else:
+                st.warning("No matching lawyers found. Please try a different query.")
         else:
-            # Call Claude API for reasoning
-            claude_prompt = format_claude_prompt(st.session_state['query'], matches)
+            # Call Claude API for reasoning with practice area emphasis
+            claude_prompt = format_claude_prompt(st.session_state['query'], matches, practice_area_filter)
             reasoning = call_claude_api(claude_prompt)
             
             # Get identified legal domains from the query
             query_domains = identify_query_domains(st.session_state['query'])
             
-            # Display results with domain information
+            # Display results with domain and practice area information
             st.markdown("## Matching Legal Experts")
+            
+            # Show practice area filter if applied
+            if practice_area_filter:
+                st.markdown(f"**Filtered by Practice Area:** {practice_area_filter}")
             
             if query_domains:
                 # Show which legal domains were identified
                 domain_str = ", ".join([f"{domain} ({score:.0%})" for domain, score in query_domains.items()])
                 st.markdown(f"**Identified Legal Domains:** {domain_str}")
             
-            st.markdown(f"Found {len(matches)} lawyers matching client needs (sorted by domain expertise match):")
+            st.markdown(f"Found {len(matches)} lawyers matching client needs (sorted by expertise match):")
             
             # Sort by match score for display
             sorted_matches = sorted(matches, key=lambda x: x['score'], reverse=True)
@@ -1209,16 +1339,18 @@ if not st.session_state['search_pressed'] or not st.session_state['query']:
         
         st.markdown("### Instructions for Matching")
         st.markdown("""
-        Enter your client's specific legal needs above or select a common query to find matching legal experts. 
-        Be as specific as possible about their requirements, including:
+        To get the best results:
         
-        - The type of legal expertise needed
-        - Any industry-specific requirements
-        - Geographic considerations (e.g., province-specific needs)
-        - The nature of the legal matter
-        - Timeframe and urgency
+        1. **Select a practice area** from the dropdown at the top to filter lawyers by their primary area of expertise
+        2. Enter your client's specific legal needs in the text box or select a common query
+        3. Be as specific as possible about their requirements, including:
+           - The type of legal expertise needed
+           - Any industry-specific requirements
+           - Geographic considerations (e.g., province-specific needs)
+           - The nature of the legal matter
+           - Timeframe and urgency
         
-        The system will match the query with lawyers who have self-reported expertise in those areas.
+        The system will match the query with lawyers who have self-reported expertise in those areas, prioritizing those whose practice area matches the specified filter.
         """)
 
 # Footer
