@@ -7,6 +7,9 @@ import re
 import json
 from functools import lru_cache
 
+# Import the domain expertise functions from legal_domains.py
+from legal_domains import match_lawyers_with_domain_expertise, LEGAL_DOMAINS, identify_query_domains
+
 # Page Configuration
 st.set_page_config(
     page_title="Legal Expert Finder",
@@ -15,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS for styling
+# CSS for styling (same as before)
 st.markdown("""
 <style>
 .lawyer-card {
@@ -162,8 +165,8 @@ h1 {
 </style>
 """, unsafe_allow_html=True)
 
-# Function to load and process the CSV data
-@lru_cache(maxsize=1)  # Cache the result to avoid reloading
+# Function to load and process the CSV data (same as before)
+@lru_cache(maxsize=1)
 def load_lawyer_data():
     try:
         # Load the skills data
@@ -182,8 +185,9 @@ def load_lawyer_data():
         st.error(f"Error loading data: {e}")
         return None
 
-# Function to process the biographical data
+# Function to process the biographical data (same as before)
 def process_bio_data(df):
+    # [This function remains the same]
     lawyers_bio = {}
     
     for _, row in df.iterrows():
@@ -219,8 +223,9 @@ def process_bio_data(df):
         'lawyers_bio': lawyers_bio
     }
 
-# Function to combine skills and biographical data
+# Function to combine skills and biographical data (same as before)
 def combine_lawyer_data(skills_data, bio_data):
+    # [This function remains the same]
     if not skills_data or not bio_data:
         return skills_data
     
@@ -335,7 +340,7 @@ def process_lawyer_data(df):
         'unique_skills': list(skill_map.keys())
     }
 
-# Function to load and process availability data
+# All the availability-related functions remain the same
 def get_lawyer_availability():
     # Real availability data parsed from the provided information
     days_available = parse_days_availability()
@@ -393,8 +398,9 @@ def get_lawyer_availability():
     
     return lawyer_availability
 
-# Function to get availability for a specific lawyer
+# Function to get availability for a specific lawyer (same as before)
 def get_availability_for_lawyer(name):
+    # [This function remains the same]
     availability_data = get_lawyer_availability()
     
     # Check for exact match
@@ -413,8 +419,9 @@ def get_availability_for_lawyer(name):
         'hours': None
     }
 
-# Function to generate availability status based on data
+# Function to generate availability status (same as before)
 def generate_availability_status(lawyer_data):
+    # [This function remains the same]
     # Current date is now February 26, 2025
     current_date = '2025-02-26'
     
@@ -464,8 +471,9 @@ def generate_availability_status(lawyer_data):
     
     return "Status Unknown"
 
-# Parse days availability data with UPDATED information
+# All the parser functions remain the same
 def parse_days_availability():
+    # [Implementation remains the same]
     days_available_text = """
     **5 days**
     **4 days**
@@ -543,8 +551,8 @@ def parse_days_availability():
     
     return result
 
-# Parse hours availability data with UPDATED information
 def parse_hours_availability():
+    # [Implementation remains the same]
     hours_available_text = """
     **80+ hours**
     **80 hours**
@@ -625,8 +633,8 @@ def parse_hours_availability():
     
     return result
 
-# Parse vacation data with UPDATED information
 def parse_vacations():
+    # [Implementation remains the same]
     vacation_text = """
     **Contractor Vacations:**
     David Zender- Feb 2- Mar 7
@@ -677,8 +685,8 @@ def parse_vacations():
     
     return result
 
-# Parse engagement notes with UPDATED information
 def parse_engagement_notes():
+    # [Implementation remains the same]
     engagement_notes_text = """
     **Lawyer and Fractional Updates to Note:**
     Bernadette Saumur's fractional will be concluding.
@@ -750,7 +758,7 @@ def parse_engagement_notes():
     
     return result
 
-# Function to get top skills for a lawyer
+# Function to get top skills for a lawyer (same as before)
 def get_top_skills(lawyer, limit=5):
     return sorted(
         [{'skill': skill, 'value': value} for skill, value in lawyer['skills'].items()],
@@ -758,71 +766,15 @@ def get_top_skills(lawyer, limit=5):
         reverse=True
     )[:limit]
 
-# IMPROVED MATCHING ALGORITHM - Focus more on skills than bios
+# NEW: Updated match_lawyers function that uses the legal_domains.py module
 def match_lawyers(data, query, top_n=5):
-    if not data:
-        return []
-    
-    # Test users to exclude
-    excluded_users = ["Ankita", "Test", "Tania"]
-    
-    # Convert query to lowercase for case-insensitive matching
-    lower_query = query.lower()
-    query_words = set(lower_query.split())
-    
-    # Calculate match scores for each lawyer
-    matches = []
-    for lawyer in data['lawyers']:
-        # Skip test users
-        if any(excluded_name in lawyer['name'] for excluded_name in excluded_users):
-            continue
-            
-        score = 0
-        matched_skills = []
-        skill_relevance = {}
-        
-        # Check each skill against the query with improved matching
-        for skill, value in lawyer['skills'].items():
-            skill_lower = skill.lower()
-            skill_words = set(skill_lower.split())
-            
-            # Direct skill match - highest relevance
-            if skill_lower in lower_query:
-                relevance = 2.0  # Full direct match gets the highest multiplier
-                score += value * relevance
-                skill_relevance[skill] = relevance
-                matched_skills.append({'skill': skill, 'value': value})
-            # Word-by-word matching with partial scores
-            else:
-                # Calculate overlap between query words and skill words
-                overlap = query_words.intersection(skill_words)
-                if overlap:
-                    # Add a score based on the fraction of overlapping words 
-                    # and the number of overlapping words
-                    relevance = min(1.0, 0.5 + (len(overlap) / len(skill_words)) * 0.5)
-                    score += value * relevance
-                    skill_relevance[skill] = relevance
-                    matched_skills.append({'skill': skill, 'value': value})
-        
-        # Only include lawyers that have at least some matched skills
-        if matched_skills:
-            # Sort matched skills by value * relevance score
-            sorted_matched_skills = sorted(
-                matched_skills, 
-                key=lambda x: x['value'] * skill_relevance.get(x['skill'], 0), 
-                reverse=True
-            )[:5]
-            
-            matches.append({
-                'lawyer': lawyer,
-                'score': score,
-                'matched_skills': sorted_matched_skills
-            })
-    
-    # Sort by score and take top N
-    return sorted(matches, key=lambda x: x['score'], reverse=True)[:top_n]
+    """
+    Matches lawyers to a query using domain-specific legal expertise
+    """
+    # Use the enhanced domain-based matching algorithm imported from legal_domains.py
+    return match_lawyers_with_domain_expertise(data, query, top_n)
 
-# Function to format Claude's analysis prompt
+# Function to format Claude's analysis prompt (updated to include domain information)
 def format_claude_prompt(query, matches):
     prompt = f"""
 I need to analyze and provide detailed reasoning for why specific lawyers match a client's legal needs based on their expertise, skills, and background.
@@ -845,6 +797,12 @@ Here are the matching lawyers with their skills and biographical information:
         prompt += "RELEVANT SKILLS:\n"
         for skill in skills:
             prompt += f"- {skill['skill']}: {skill['value']} points\n"
+        
+        # Add domain information if available
+        if 'matched_domains' in match and match['matched_domains']:
+            prompt += "\nMATCHED LEGAL DOMAINS:\n"
+            for domain in match['matched_domains']:
+                prompt += f"- {domain}\n"
         
         # Add biographical information
         prompt += "\nBIOGRAPHICAL INFORMATION:\n"
@@ -887,18 +845,20 @@ Here are the matching lawyers with their skills and biographical information:
     prompt += """
 For each lawyer, provide a DETAILED explanation (at least 3-4 sentences) of why they would be an excellent match for this client need. Focus primarily on their skills and expertise rather than biographical information.
 
-IMPORTANT: Your analysis should prioritize:
-1. Skills relevance - How their specific skills directly relate to the client's needs (THIS IS MOST IMPORTANT)
-2. Prior experience that's directly relevant to the client query
-3. Availability to take on this work
+IMPORTANT: Your analysis should adhere to these strict guidelines:
+1. ONLY highlight skills that EXACTLY match the specific domain expertise required (e.g., "healthcare compliance" not just general "compliance")
+2. DO NOT make unsupported assumptions about transferable skills across different legal domains
+3. If a lawyer has expertise in a related but not exact area, clearly acknowledge the limitation (e.g., "While they have experience in financial compliance, their profile doesn't show specific healthcare compliance expertise")
+4. Focus on the lawyer's self-reported skill areas and values that directly address the client's specific needs
+5. Mention availability when relevant to taking on this work
 
-The biographical information should be used for context only. Your explanation should be specific to each lawyer's unique skill set as it relates to the client's needs.
+Be honest and precise about matching. It's better to acknowledge limitations than to overstate expertise in areas not supported by their skill profile.
 
 Format your response in JSON like this:
 {
-    "lawyer1_name": "Detailed explanation of why lawyer 1 is an excellent match...",
-    "lawyer2_name": "Detailed explanation of why lawyer 2 is an excellent match...",
-    "lawyer3_name": "Detailed explanation of why lawyer 3 is an excellent match..."
+    "lawyer1_name": "Detailed explanation of why lawyer 1 is an excellent match or acknowledgment of limitations...",
+    "lawyer2_name": "Detailed explanation of why lawyer 2 is an excellent match or acknowledgment of limitations...",
+    "lawyer3_name": "Detailed explanation of why lawyer 3 is an excellent match or acknowledgment of limitations..."
 }
 """
     return prompt
@@ -1079,11 +1039,20 @@ if st.session_state['search_pressed'] and st.session_state['query']:
             claude_prompt = format_claude_prompt(st.session_state['query'], matches)
             reasoning = call_claude_api(claude_prompt)
             
-            # Display results
-            st.markdown("## Matching Legal Experts")
-            st.markdown(f"Found {len(matches)} lawyers matching client needs:")
+            # Get identified legal domains from the query
+            query_domains = identify_query_domains(st.session_state['query'])
             
-            # Sort by match score for display (not alphabetically)
+            # Display results with domain information
+            st.markdown("## Matching Legal Experts")
+            
+            if query_domains:
+                # Show which legal domains were identified
+                domain_str = ", ".join([f"{domain} ({score:.0%})" for domain, score in query_domains.items()])
+                st.markdown(f"**Identified Legal Domains:** {domain_str}")
+            
+            st.markdown(f"Found {len(matches)} lawyers matching client needs (sorted by domain expertise match):")
+            
+            # Sort by match score for display
             sorted_matches = sorted(matches, key=lambda x: x['score'], reverse=True)
             
             for match in sorted_matches:
@@ -1165,15 +1134,25 @@ if st.session_state['search_pressed'] and st.session_state['query']:
                     if bio and bio.get('industry_experience'):
                         html_output += f'<div class="industry-experience"><strong>Industry Experience:</strong> {bio["industry_experience"]}</div>'
                     
+                    # Domain expertise indicator
+                    domain_expertise = "has_domain_expertise" in match and match["has_domain_expertise"]
+                    domain_tag = '<span style="background-color: #e8f5e9; color: #2e7d32; border-radius: 10px; padding: 2px 8px; font-size: 12px; margin-left: 10px;">Domain Expert</span>' if domain_expertise else ""
+                    
+                    # Show matched domains if available
+                    matched_domains_html = ""
+                    if "matched_domains" in match and match["matched_domains"]:
+                        matched_domains_html = '<div style="margin-top: 5px;"><strong>Expertise Areas:</strong> ' + ', '.join(match["matched_domains"]) + '</div>'
+                    
                     # Add the rest of the card
                     html_output += f"""
                         <div class="billable-rate">Rate: {lawyer['billable_rate']} | Recent Client: {lawyer['last_client']}</div>
+                        {matched_domains_html}
                         <div style="margin-top: 10px;">
-                            <strong>Relevant Expertise:</strong><br/>
+                            <strong>Relevant Expertise:</strong> {domain_tag}<br/>
                             {"".join([f'<span class="skill-tag">{skill["skill"]}: {skill["value"]}</span>' for skill in matched_skills])}
                         </div>
                         <div class="reasoning-box">
-                            <div class="match-rationale-title">WHY THIS LAWYER IS AN EXCELLENT MATCH:</div>
+                            <div class="match-rationale-title">MATCH ANALYSIS:</div>
                             {reasoning.get(lawyer['name'], 'This lawyer has relevant expertise in the areas described in the client query.')}
                         </div>
                     </div>
@@ -1246,6 +1225,6 @@ if not st.session_state['search_pressed'] or not st.session_state['query']:
 st.markdown("---")
 st.markdown(
     "This internal tool uses self-reported expertise from 64 lawyers who distributed 120 points across 167 different legal skills. "
-    "Results are sorted by match score and matches are based on keyword relevance and self-reported skill points. "
+    "Results are sorted by domain expertise match and only display lawyers with precisely relevant skills for the specific legal practice areas requested. "
     "Last updated: February 26, 2025 and has March Attorney Availability Updated"
 )
