@@ -37,7 +37,7 @@ LEGAL_DOMAINS = {
     ],
     
     "Personal Injury": [
-        "personal injury", "injury", "damages", "compensation", "accidents", "negligence", 
+        "personal injury", "injury", "damages", "accidents", "negligence", 
         "medical experts", "bodily injury", "wrongful death", "product liability", 
         "premises liability", "automobile accident", "slip and fall", "medical malpractice",
         "catastrophic injury", "pain and suffering", "lost wages", "physical therapy"
@@ -119,7 +119,7 @@ LEGAL_DOMAINS = {
     ],
     
     "Employee Benefits": [
-        "employee benefits", "retirement", "401k", "403b", "health benefits", "compensation", 
+        "employee benefits", "retirement", "401k", "403b", "health benefits",  
         "stock options", "ERISA", "pension", "profit sharing", "welfare plans", "cafeteria plans",
         "health insurance", "life insurance", "disability insurance", "deferred compensation",
         "fringe benefits", "equity compensation", "executive compensation"
