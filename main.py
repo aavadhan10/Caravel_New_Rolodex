@@ -4,6 +4,7 @@ import numpy as np
 import os
 import anthropic
 import re
+import json
 from functools import lru_cache
 
 # Page Configuration
@@ -757,16 +758,17 @@ def get_top_skills(lawyer, limit=5):
         reverse=True
     )[:limit]
 
-# Function to match lawyers with a query
+# IMPROVED MATCHING ALGORITHM - Focus more on skills than bios
 def match_lawyers(data, query, top_n=5):
     if not data:
         return []
     
-    # Convert query to lowercase for case-insensitive matching
-    lower_query = query.lower()
-    
     # Test users to exclude
     excluded_users = ["Ankita", "Test", "Tania"]
+    
+    # Convert query to lowercase for case-insensitive matching
+    lower_query = query.lower()
+    query_words = set(lower_query.split())
     
     # Calculate match scores for each lawyer
     matches = []
@@ -777,19 +779,44 @@ def match_lawyers(data, query, top_n=5):
             
         score = 0
         matched_skills = []
+        skill_relevance = {}
         
-        # Check each skill against the query
+        # Check each skill against the query with improved matching
         for skill, value in lawyer['skills'].items():
             skill_lower = skill.lower()
-            if skill_lower in lower_query or any(word in skill_lower for word in lower_query.split()):
-                score += value
+            skill_words = set(skill_lower.split())
+            
+            # Direct skill match - highest relevance
+            if skill_lower in lower_query:
+                relevance = 2.0  # Full direct match gets the highest multiplier
+                score += value * relevance
+                skill_relevance[skill] = relevance
                 matched_skills.append({'skill': skill, 'value': value})
+            # Word-by-word matching with partial scores
+            else:
+                # Calculate overlap between query words and skill words
+                overlap = query_words.intersection(skill_words)
+                if overlap:
+                    # Add a score based on the fraction of overlapping words 
+                    # and the number of overlapping words
+                    relevance = min(1.0, 0.5 + (len(overlap) / len(skill_words)) * 0.5)
+                    score += value * relevance
+                    skill_relevance[skill] = relevance
+                    matched_skills.append({'skill': skill, 'value': value})
         
-        if score > 0:
+        # Only include lawyers that have at least some matched skills
+        if matched_skills:
+            # Sort matched skills by value * relevance score
+            sorted_matched_skills = sorted(
+                matched_skills, 
+                key=lambda x: x['value'] * skill_relevance.get(x['skill'], 0), 
+                reverse=True
+            )[:5]
+            
             matches.append({
                 'lawyer': lawyer,
                 'score': score,
-                'matched_skills': sorted(matched_skills, key=lambda x: x['value'], reverse=True)[:5]
+                'matched_skills': sorted_matched_skills
             })
     
     # Sort by score and take top N
@@ -858,16 +885,14 @@ Here are the matching lawyers with their skills and biographical information:
         prompt += "\n\n"
     
     prompt += """
-For each lawyer, provide a DETAILED explanation (at least 4-5 sentences) of why they would be an excellent match for this client need. Include specific aspects of their:
+For each lawyer, provide a DETAILED explanation (at least 3-4 sentences) of why they would be an excellent match for this client need. Focus primarily on their skills and expertise rather than biographical information.
 
-1. Skills relevance - How their specific skills directly relate to the client's needs
-2. Industry background - How their industry experience aligns with the client's requirements
-3. Prior experience - Highlight relevant previous work or clients that demonstrate fit
-4. Education or certifications that may be valuable for this matter
-5. Geographic or jurisdictional advantages if relevant
-6. Current availability to take on this work
+IMPORTANT: Your analysis should prioritize:
+1. Skills relevance - How their specific skills directly relate to the client's needs (THIS IS MOST IMPORTANT)
+2. Prior experience that's directly relevant to the client query
+3. Availability to take on this work
 
-Your analysis should be thorough and specific, referencing their unique qualifications rather than generic statements. Format your response as a detailed paragraph for each lawyer that explains exactly why they're well-positioned to address this specific client need.
+The biographical information should be used for context only. Your explanation should be specific to each lawyer's unique skill set as it relates to the client's needs.
 
 Format your response in JSON like this:
 {
@@ -909,12 +934,12 @@ def call_claude_api(prompt):
             "content-type": "application/json"
         }
         
-        # Request payload
+        # Request payload - Use Haiku for faster responses
         payload = {
-            "model": "claude-3-opus-20240229",
+            "model": "claude-3-haiku-20240307",
             "max_tokens": 1000,
             "temperature": 0.0,
-            "system": "You are a legal resource coordinator that analyzes lawyer expertise matches. You provide brief, factual explanations about why specific lawyers match particular client legal needs based on their self-reported skills. Keep explanations concise and focused on the relevant expertise. Include practice area information where relevant.",
+            "system": "You are a legal resource coordinator that analyzes lawyer expertise matches. You provide brief, factual explanations about why specific lawyers match particular client legal needs based on their self-reported skills. Focus primarily on skills and expertise rather than biographical information. Keep explanations concise and focused on the relevant expertise.",
             "messages": [
                 {"role": "user", "content": prompt}
             ]
@@ -948,18 +973,20 @@ def call_claude_api(prompt):
         
         # Return a fallback response
         return {"error": f"API error: {str(e)}"}
+
+# IMPROVED: Callback function to set query and trigger search
+def set_query_and_search(text):
+    st.session_state['query'] = text
+    st.session_state['search_pressed'] = True
+    # Force a rerun to immediately show results
+    st.experimental_rerun()
     
 # Initialize session state variables
 if 'query' not in st.session_state:
     st.session_state['query'] = ""
 if 'search_pressed' not in st.session_state:
     st.session_state['search_pressed'] = False
-
-# Helper function to set the query and trigger search
-def set_query(text):
-    st.session_state['query'] = text
-    st.session_state['search_pressed'] = True
-
+    
 # Set up sidebar
 st.sidebar.title("⚖️ Legal Expert Finder")
 st.sidebar.title("About")
@@ -980,7 +1007,7 @@ recent_queries = [
 ]
 for query in recent_queries:
     if st.sidebar.button(query, key=f"recent_{query}", help=f"Use this recent query: {query}"):
-        set_query(query)
+        set_query_and_search(query)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Need Help?")
@@ -1024,8 +1051,9 @@ cols = st.columns(3)
 for i, preset_query in enumerate(preset_queries):
     col_idx = i % 3
     with cols[col_idx]:
+        # IMPROVED: Use set_query_and_search for immediate refresh
         if st.button(preset_query, key=f"preset_{i}"):
-            set_query(preset_query)
+            set_query_and_search(preset_query)
 
 # Update query in session state from text area
 if query:
@@ -1035,11 +1063,13 @@ if query:
 search_pressed = st.button("🔍 Find Matching Lawyers", type="primary", use_container_width=True)
 if search_pressed:
     st.session_state['search_pressed'] = True
+    # Force a rerun to ensure results display immediately
+    st.experimental_rerun()
 
 # Display results when search is pressed
 if st.session_state['search_pressed'] and st.session_state['query']:
     with st.spinner("Matching client needs with our legal experts..."):
-        # Get matches
+        # Get matches with improved matching algorithm
         matches = match_lawyers(data, st.session_state['query'])
         
         if not matches:
@@ -1053,8 +1083,8 @@ if st.session_state['search_pressed'] and st.session_state['query']:
             st.markdown("## Matching Legal Experts")
             st.markdown(f"Found {len(matches)} lawyers matching client needs:")
             
-            # Sort alphabetically for display (not by score)
-            sorted_matches = sorted(matches, key=lambda x: x['lawyer']['name'])
+            # Sort by match score for display (not alphabetically)
+            sorted_matches = sorted(matches, key=lambda x: x['score'], reverse=True)
             
             for match in sorted_matches:
                 lawyer = match['lawyer']
@@ -1216,6 +1246,6 @@ if not st.session_state['search_pressed'] or not st.session_state['query']:
 st.markdown("---")
 st.markdown(
     "This internal tool uses self-reported expertise from 64 lawyers who distributed 120 points across 167 different legal skills. "
-    "Results are sorted alphabetically and matches are based on keyword relevance and self-reported skill points. "
+    "Results are sorted by match score and matches are based on keyword relevance and self-reported skill points. "
     "Last updated: February 26, 2025 and has March Attorney Availability Updated"
 )
