@@ -126,11 +126,13 @@ LEGAL_DOMAINS = {
     ],
     
     "Entertainment/Sports Law": [
-        "entertainment", "sports", "athletes", "endorsement", "marketing agreements", 
-        "contracts", "on-air personalities", "film", "television", "music", "publishing",
-        "copyright", "licensing", "talent agreements", "rights acquisition", "royalties",
-        "sports leagues", "athlete representation", "sponsorship", "media rights"
-    ],
+    "entertainment", "sports", "athletes", "endorsement", "marketing agreements", 
+    "on-air personalities", "film", "television", "music", "publishing",
+    "entertainment copyright", "talent agreements", "rights acquisition", "royalties",
+    "sports leagues", "athlete representation", "sponsorship", "media rights",
+    "entertainment licensing", "performance contracts", "entertainment industry",
+    "sports contract", "celebrity", "talent", "performer", "broadcasting rights"
+],
     
     "Employment & Labor Law": [
         "employment", "labor", "unfair labor practices", "collective bargaining", 
@@ -176,11 +178,12 @@ LEGAL_DOMAINS = {
     ],
     
     "Intellectual Property": [
-        "intellectual property", "IP", "copyright", "trademark", "patent", "licensing", 
-        "trade secrets", "USPTO", "infringement", "intellectual asset", "technology transfer",
-        "software", "DMCA", "fair use", "patent application", "trademark registration",
-        "IP portfolio", "IP litigation", "IP prosecution", "IP management", "inventor"
-    ],
+    "intellectual property", "IP", "copyright", "trademark", "patent", "licensing", 
+    "trade secrets", "USPTO", "infringement", "intellectual asset", "technology transfer",
+    "software", "DMCA", "fair use", "patent application", "trademark registration",
+    "IP portfolio", "IP litigation", "IP prosecution", "IP management", "inventor",
+    "technology licensing", "software licensing", "tech IP", "code"
+],
     
     "International Practice": [
         "international", "foreign", "global", "cross-border", "multinational", "overseas",
@@ -245,6 +248,14 @@ LEGAL_DOMAINS = {
         "return to work", "vocational rehabilitation", "permanent disability", "temporary disability",
         "workers' comp claim", "workers' comp insurance", "employer liability", "exclusive remedy"
     ]
+    "Technology Law": [
+    "technology", "software", "SaaS", "cloud computing", "tech", "IT contracts",
+    "software licensing", "technology agreements", "technology transactions", 
+    "tech startups", "software development", "SaaS contracts", "technology licensing",
+    "software as a service", "technology vendors", "IT procurement", "tech licensing",
+    "digital services", "technology compliance", "data licensing", "tech contracts",
+    "software agreements", "technology services", "digital platforms"
+]
 }
 
 # Function to determine if a query matches a specific legal domain
