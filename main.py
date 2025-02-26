@@ -99,6 +99,15 @@ h1 {
     display: inline-block;
     margin-left: 10px;
 }
+.availability-tag-adhoc {
+    background-color: #fff3e0;
+    border-radius: 15px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #e65100;
+    display: inline-block;
+    margin-left: 10px;
+}
 .vacation-info {
     color: #d32f2f;
     font-size: 13px;
@@ -405,24 +414,28 @@ def get_availability_for_lawyer(name):
 
 # Function to generate availability status based on data
 def generate_availability_status(lawyer_data):
-    # The current date is February 25, 2025
-    current_date = '2025-02-25'
+    # Current date is now February 26, 2025
+    current_date = '2025-02-26'
     
     # Check if on vacation today
     if 'vacations' in lawyer_data:
         for vacation in lawyer_data['vacations']:
-            if "Feb 25" in vacation or (
+            if "Feb 26" in vacation or (
                 "Feb" in vacation and "-" in vacation and 
-                not any(month in vacation for month in ["Mar", "April", "May"])):
+                not any(day in vacation for day in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25"])):
                 return "On Vacation"
     
     # Check engagement notes for current status
     if 'engagementNote' in lawyer_data:
-        note = lawyer_data['engagementNote']
-        if "not currently in an engagement" in note:
-            return "Available Now"
-        if "will conclude at the end of February" in note:
-            return "Available Soon (March)"
+        note = lawyer_data['engagementNote'].lower()
+        if "full capacity" in note or "availability will increase" in note or "capacity for new work will increase" in note:
+            return "Available Soon"
+        if "will be concluding" in note or "will conclude" in note:
+            return "Available Soon"
+        if "availability for ad hoc" in note:
+            return "Available for Ad Hoc"
+        if "no new work until" in note:
+            return "Not Available"
     
     # Use days availability to determine status
     if 'days' in lawyer_data:
@@ -450,7 +463,7 @@ def generate_availability_status(lawyer_data):
     
     return "Status Unknown"
 
-# Parse days availability data
+# Parse days availability data with UPDATED information
 def parse_days_availability():
     days_available_text = """
     **5 days**
@@ -459,69 +472,57 @@ def parse_days_availability():
     **2 days**
     **1 day**
     **0 days**
-    Ashleigh Frankel
-    Spencer Shepherd
-    Evelyn Ackah
-    Dave McIntyre
+    Meenal Gole
+    Leonard Gaik
     Sean Holler
     Bernadette Saumur
+    Alan Sless
     John Burns
-    Adrian Dirassar
+    Spencer Shepherd
+    Dave McIntyre
     Wendy Bach
-    Meenal Gole
-     
+    Ashleigh Frankel
      
     Kristen Pizzolo
-    James Oborne
-     
     Leslie Allan
+    Lance Lehman
     Bill Stanger
-    Peter Dale
+    Mark Wainman
     Lisa McDowell
-    Bill Herman
-    Frank Giblon
+    Peter Dale
      
-    Mitch Mostyn
-    Randy Witten
-    Rose Oushalkas
-    Alan Sless
-    Nikki Stewart-St. Arnault
     Connie Chan
     Jeff Bright
+    John Tyrell
+    Rose Oushalkas
     David Masse
-    Zubdah Ahmad
     Greg Porter
-    Hugh Kerr
-    Olivia Dutka
-    Jason Lakhan
-     
-    Melissa Babel
-    David Dunbar
-    Josee Cameron-Virgo
+    Nikki Stewart-St. Arnault
+    Randy Witten
     Sean Mitra
+    Hugh Kerr
     Michelle Grant-Asselin
-    Morli Shemesh
-    Sarah Sidhu
-     
-    Ellen Swan
-    Sarah Blackburn
-    John Whyte
-    Rory Dyck
-    Sherry Hanlon
-    Corrie Stepan
-    Peter Kalins
+    Antoine Malek
     Wanda Shreve
-    Greg Ramsay
-    Jim Papamanolis
-    Mark Wainman
+    Corrie Stepan
+    John Whyte
+    Peter Kalins
+    Sherry Hanlon
+    Dan Black
+    Melissa Babel
+    Ellen Swan
     Brenda Chandler
-    Michele Koyle
-    Annie Belecki
-    Christa Wessel
-    Chelsea Bianchin
     Binita Jacob
-    Ernie Belyea
+    Sarah Blackburn
+    Michele Koyle
+    Jim Papamanolis
+    Rory Dyck
+    Sara Kunto
+    Annie Belecki
     Aliza Dason
+    Joel Guralnick
+    Greg Ramsay
+    Esia Giaouris
     """
     
     lines = days_available_text.split('\n')
@@ -541,15 +542,7 @@ def parse_days_availability():
     
     return result
 
-# Function to get top skills for a lawyer
-def get_top_skills(lawyer, limit=5):
-    return sorted(
-        [{'skill': skill, 'value': value} for skill, value in lawyer['skills'].items()],
-        key=lambda x: x['value'],
-        reverse=True
-    )[:limit]
-
-# Parse hours availability data
+# Parse hours availability data with UPDATED information
 def parse_hours_availability():
     hours_available_text = """
     **80+ hours**
@@ -559,68 +552,58 @@ def parse_hours_availability():
     **30 hours**
     **20 hours**
     **0 hours**
-    Spencer Shepherd
-    Sean Holler
-    Dave McIntyre
     Bernadette Saumur
-    Adrian Dirassar
-    Bill Herman
-    Wendy Bach
-    Ashleigh Frankel
-    James Oborne
-     
-    Leslie Allan
-    Evelyn Ackah
-    John Burns
-    Kristen Pizzolo
-    Frank Giblon
-    Zubdah Ahmad
-    Meenal Gole
     Alan Sless
+    Spencer Shepherd
+    Dave McIntyre
+    Kristen Pizzolo
+    Leonard Gaik
+    Wendy Bach
+     
+    Sean Holler
+    Leslie Allan
+    Lance Lehman
+    Lisa McDowell
+    Meenal Gole
+    Ashleigh Frankel
     Bill Stanger
     Peter Dale
-    Lisa McDowell
-    Sarah Sidhu
+    John Tyrell
+     
+    John Burns
+    Michelle Grant-Asselin
+    Nikki Stewart-St. Arnault
      
     Jeff Bright
-    Michelle Grant-Asselin
-    Len Gaik
-    Nikki Stewart-St. Arnault
-    Olivia Dutka
-    Jason Lakhan
-     
-    Rose Oushalkas
-    Greg Porter
     Mark Wainman
-    Sean Mitra
-    Morli Shemesh
-     
-    Randy Witten
-    Melissa Babel
-    Mitch Mostyn
-    Connie Chan
+    Rose Oushalkas
     David Masse
-    Hugh Kerr
-    David Dunbar
-    Josee Cameron-Virgo
-    Rory Dyck
-    Wanda Shreve
-    Greg Ramsay
-    Chelsea Bianchin
+    Greg Porter
+    Sean Mitra
      
-    Ellen Swan
-    Sarah Blackburn
-    John Whyte
-    Sherry Hanlon
+    Connie Chan
+    Randy Witten
+    Hugh Kerr
+    Antoine Malek
+    Wanda Shreve
+    Joel Guralnick
+    Greg Ramsay
+    Esia Giaouris
     Corrie Stepan
+    John Whyte
     Peter Kalins
-    Jim Papamanolis
+    Sherry Hanlon
+    Dan Black
+    Melissa Babel
+    Ellen Swan
     Brenda Chandler
-    Michele Koyle
-    Annie Belecki
-    Christa Wessel
     Binita Jacob
-    Ernie Belyea
+    Sarah Blackburn
+    Michele Koyle
+    Jim Papamanolis
+    Rory Dyck
+    Sara Kunto
+    Annie Belecki
     Aliza Dason
     """
     
@@ -641,28 +624,30 @@ def parse_hours_availability():
     
     return result
 
-# Parse vacation data
+# Parse vacation data with UPDATED information
 def parse_vacations():
     vacation_text = """
     **Contractor Vacations:**
     David Zender- Feb 2- Mar 7
-    Chelsea Bianchin- Feb 12-19; Mar 10-23
-    John Burns- Feb 14
-    Mark Wainman- Feb 21
-    Lisa McDowell- Feb 24-28
+    Dan Black- Feb 22- March 2
+    Lisa McDowell- Feb 24-28; April 30-May 14
     John Whyte- Feb 25-Mar 25
     Sue Gaudi- Feb 26- Mar 1; March 7-17; May 15-30
     Sarah Blackburn- Feb 27-Mar 3; Mar 8-15
     Sara Kunto- Feb 28-March 9
     Kristen Pizzolo- Mar 3-7
     Josee Cameron-Virgo- March 4-17
-    Michelle Grant Asselin- March 10-16
-    Ellen Swan- March 8-16
+    John Burns- March 5-8
+    Ellen Swan- March 7-17
     Jim Papamanolis- March 9-15
-    Leslie Allan- March 9-15
+    Leslie Allan- March 9-15; July 20- Aug 2
+    Michelle Grant Asselin- March 8-16
     Melissa Babel- March 10-18
+    Chelsea Bianchin- Mar 10-23
     Lori Lyn Adams- March 15-30
+    Connie Chan- March 15-31
     David Dunbar- April 17- May 6
+    Binita Jacobs- April 28-29
     David Masse- May 10-30
     """
     
@@ -691,20 +676,25 @@ def parse_vacations():
     
     return result
 
-# Parse engagement notes
+# Parse engagement notes with UPDATED information
 def parse_engagement_notes():
     engagement_notes_text = """
     **Lawyer and Fractional Updates to Note:**
-    * Bernadette Saumur indicates that her engagement with GTAA will conclude at the end of February
-    * Wendy Bach indicates that her engagement will conclude in Mid-April
-    * Rose Oushalkas indicates that her engagement with Seaboard may conclude at the end of February
-    * Mark Wainman indicates that he anticipates his engagement will end October of this year
-    * Jason Lakhan indicates that he is not currently in an engagement
-    * Mitch Mostyn indicates that his engagement with Magna will reduce to 20 hours/month in March, and then will move to ad hoc in April
-    * Wanda Shreve indicates that she anticipates her engagement will continue into the Spring/Summer
-    * Jim Papamanolis indicates that he anticipates his fractional will end at the end of May
-    * Ernie Belyea indicates that his engagement has been extended through the remainder of 2025
-    * Aliza Dason indicates that her engagement will continue through the remainder of 2025
+    Bernadette Saumur's fractional will be concluding.
+    Alan Sless is concluding his engagement with Choice Properties and will have full capacity for new work as of the end of March.
+    Lance Lehman is interested in taking on more work as his fractional is reducing hours as of March 1.
+    Wendy Bach indicates that her fractional will conclude at the end of April.
+    Mark Wainman has availability for ad hoc work.
+    Rose Oushalkas indicates that her fractional will conclude at the end of February, and that her capacity for new work will increase.
+    Antoine Malek indicates that his fractional will conclude at the end of March, and his availability will significantly increase the week of March 17.
+    Wanda Shreve indicates that her fractional could potentially conclude at the end of March.
+    Greg Ramsay has availability for ad hoc work.
+    John Whyte is interested in taking on 1-2 days/ week after he returns from his vacation at the end of March. He would like to be considered for commercial contracts or mentoring work.
+    Dan Black expects his availability to increase in March.
+    Melissa Babel is requesting no new work until after March 15.
+    Jim Papamanolis indicates that his fractional may conclude at the end of May.
+    Sara Kunto indicates that her fractional with TMU will be ending in April.
+    Aliza Dason indicates that her fractional will conclude at the end of 2025.
     """
     
     lines = engagement_notes_text.split('\n')
@@ -720,14 +710,52 @@ def parse_engagement_notes():
             collecting_notes = True
             continue
         
-        if collecting_notes and line.startswith("*"):
-            note = line[1:].strip()
-            name_match = re.match(r'([^-]*?)indicates', note)
-            if name_match:
-                name = name_match.group(1).strip()
-                result[name] = note
+        if collecting_notes and not line.startswith("**"):
+            # Extract name from the beginning of each line
+            name_end_pos = line.find("'s fractional")
+            if name_end_pos > 0:
+                name = line[:name_end_pos].strip()
+                result[name] = line
+                continue
+                
+            name_end_pos = line.find(" is ")
+            if name_end_pos > 0:
+                name = line[:name_end_pos].strip()
+                result[name] = line
+                continue
+                
+            name_end_pos = line.find(" indicates ")
+            if name_end_pos > 0:
+                name = line[:name_end_pos].strip()
+                result[name] = line
+                continue
+                
+            name_end_pos = line.find(" has ")
+            if name_end_pos > 0:
+                name = line[:name_end_pos].strip()
+                result[name] = line
+                continue
+                
+            name_end_pos = line.find(" expects ")
+            if name_end_pos > 0:
+                name = line[:name_end_pos].strip()
+                result[name] = line
+                continue
+                
+            name_end_pos = line.find(" is ")
+            if name_end_pos > 0:
+                name = line[:name_end_pos].strip()
+                result[name] = line
     
     return result
+
+# Function to get top skills for a lawyer
+def get_top_skills(lawyer, limit=5):
+    return sorted(
+        [{'skill': skill, 'value': value} for skill, value in lawyer['skills'].items()],
+        key=lambda x: x['value'],
+        reverse=True
+    )[:limit]
 
 # Function to match lawyers with a query
 def match_lawyers(data, query, top_n=5):
@@ -927,12 +955,12 @@ if 'query' not in st.session_state:
 if 'search_pressed' not in st.session_state:
     st.session_state['search_pressed'] = False
 
-# Helper function to set the query and trigger search - MOVED HERE TO FIX THE ERROR
+# Helper function to set the query and trigger search
 def set_query(text):
     st.session_state['query'] = text
     st.session_state['search_pressed'] = True
 
-# Set up sidebar - MOVED FROM ORIGINAL LOCATION
+# Set up sidebar
 st.sidebar.title("⚖️ Legal Expert Finder")
 st.sidebar.title("About")
 st.sidebar.info(
@@ -1035,10 +1063,12 @@ if st.session_state['search_pressed'] and st.session_state['query']:
                 with st.container():
                     # Determine availability class based on status
                     availability_class = "availability-tag"
-                    if "Limited" in lawyer['availability'] or "Vacation" in lawyer['availability']:
+                    if "Limited" in lawyer['availability'] or "Vacation" in lawyer['availability'] or "Not Available" in lawyer['availability']:
                         availability_class = "availability-tag-limited"
                     elif "Available" in lawyer['availability']:
                         availability_class = "availability-tag-available"
+                    elif "Ad Hoc" in lawyer['availability']:
+                        availability_class = "availability-tag-adhoc"
                         
                     # Use raw HTML string concatenation to avoid Streamlit escaping issues
                     html_output = f"""
@@ -1187,5 +1217,5 @@ st.markdown("---")
 st.markdown(
     "This internal tool uses self-reported expertise from 64 lawyers who distributed 120 points across 167 different legal skills. "
     "Results are sorted alphabetically and matches are based on keyword relevance and self-reported skill points. "
-    "Last updated: February 25, 2025"
+    "Last updated: February 26, 2025 and has March Attorney Availability Updated"
 )
